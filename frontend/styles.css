@@ -1,0 +1,36 @@
+:root {
+  font-family: "Noto Sans Lao", system-ui, sans-serif;
+  color: #17212b;
+  background: #f4f7fb;
+  --card: #fff;
+  --line: #dde5ef;
+  --blue: #1677ff;
+  --orange: #ff7200;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+.shell { width: min(760px, 100%); margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 20px; box-shadow: 0 8px 25px rgb(24 48 83 / 8%); }
+.wallet { text-align: center; }
+.wallet p { margin: 0 0 8px; font-size: 1.1rem; }
+.wallet span { display: block; color: #6b7785; }
+.wallet strong { display: block; margin-top: 12px; color: #16a34a; font-size: 2rem; }
+.wallet strong span { display: inline; color: inherit; }
+.accent { color: white; border: 0; background: linear-gradient(135deg, #ff9700, #ff5400); }
+.accent h1 { font-size: 1.15rem; text-align: center; margin: 0 0 14px; }
+.accent div { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid rgb(255 255 255 / 28%); }
+.accent b { color: #fff600; white-space: nowrap; }
+h2 { margin: 0 0 10px; font-size: 1.1rem; }
+.purchase { text-align: center; }
+.purchase p { color: #6b7785; }
+input { width: 100%; padding: 16px; border: 2px solid #91bfff; border-radius: 14px; text-align: center; font-size: 2rem; letter-spacing: .35em; font-weight: 700; }
+button { width: 100%; margin-top: 12px; padding: 14px; border: 0; border-radius: 14px; background: var(--blue); color: white; font: inherit; font-weight: 700; cursor: pointer; }
+button:disabled { opacity: .55; cursor: wait; }
+#message { min-height: 1.5em; color: #b42318; }
+.tickets { display: flex; flex-wrap: wrap; gap: 8px; }
+.ticket { padding: 8px 11px; border-radius: 10px; background: #eaf3ff; color: #095fca; font-weight: 700; letter-spacing: .12em; }
+@media (prefers-color-scheme: dark) {
+  :root { color: #edf2f7; background: #111b25; --card: #192632; --line: #2c3b48; }
+  input { background: #101b25; color: white; }
+}
+

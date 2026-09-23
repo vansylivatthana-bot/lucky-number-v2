@@ -1,0 +1,13 @@
+{
+  "name": "lucky-number-v2",
+  "private": true,
+  "version": "2.0.0",
+  "scripts": {
+    "start": "npm --prefix backend start",
+    "test": "npm --prefix backend test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
+

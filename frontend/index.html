@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="lo">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Lucky Number VIP</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="config.js"></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <section class="wallet card">
+      <p id="welcome">ສະບາຍດີ</p>
+      <span>ຍອດເງິນ In-App Wallet</span>
+      <strong><span id="balance">—</span> USDT</strong>
+    </section>
+
+    <section class="prizes card accent">
+      <h1>🏆 ມູນຄ່າລາງວັນສະສົມອາທິດນີ້</h1>
+      <div><span>🥇 ລາງວັນທີ 1</span><b id="prize1">—</b></div>
+      <div><span>🥈 ລາງວັນທີ 2 (ຕໍ່ລາງວັນ)</span><b id="prize2">—</b></div>
+      <div><span>🥉 ລາງວັນທີ 3 (ຕໍ່ລາງວັນ)</span><b id="prize3">—</b></div>
+    </section>
+
+    <section class="purchase card">
+      <h2>ເລືອກຕົວເລກນຳໂຊກຂອງທ່ານ</h2>
+      <p>ປ້ອນຕົວເລກ 5 ຫຼັກ (00000–99999) · 5 USDT</p>
+      <input id="ticketNumber" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="00000" aria-label="ຕົວເລກ 5 ຫຼັກ">
+      <button id="buyButton" type="button">ຊື້ຕົວເລກ</button>
+      <p id="message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <h2>🎟️ ຕົວເລກຂອງທ່ານອາທິດນີ້</h2>
+      <div id="tickets" class="tickets">—</div>
+    </section>
+
+    <section class="card referral">
+      <h2>🤝 ລະບົບນາຍໜ້າ</h2>
+      <p>ໝູ່ທີ່ທ່ານແນະນຳ: <strong id="friendsCount">—</strong> ຄົນ</p>
+    </section>
+  </main>
+</body>
+</html>
+
