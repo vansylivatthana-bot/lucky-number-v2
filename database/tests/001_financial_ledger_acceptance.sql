@@ -177,9 +177,17 @@ $$;
 -- 7. An eligible three-rollover refund returns the entire ticket price to the
 -- buyer. The released 2% is absorbed by the operator-funded reserve; it is not
 -- deducted from the buyer's refund.
+-- The refund procedure intentionally checks the ticket's own observed rollover
+-- count, rather than the round-wide count, so tickets bought later cannot
+-- refund early.  The close-period procedure increments this field in production;
+-- this fixture sets it directly to exercise the refund settlement path.
 update public.monthly_draw_rounds_v3
 set status = 'ROLLED_OVER', rollover_count = 3
 where id = '00000000-0000-4000-8000-000000000101';
+
+update public.draw_tickets_v3
+set rollover_count_observed = 3
+where owner_telegram_id = '9000000011';
 
 select public.complete_rollover_refund_v3(
   (select id from public.draw_tickets_v3 where owner_telegram_id = '9000000011'),
