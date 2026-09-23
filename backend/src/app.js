@@ -23,6 +23,103 @@ export function createApp({ config, supabase, botStatus, bot }) {
     res.status(ready ? 200 : 503).json({ ok: ready, database: !error, telegram: botStatus.webhookReady });
   });
 
+  // This endpoint intentionally exposes only a proof after the database has
+  // settled the round. It never returns Telegram IDs or wallet information.
+  app.get('/api/draws/:roundCode/proof', async (req, res) => {
+    const roundCode = String(req.params.roundCode || '').trim();
+    if (!/^DR-\d{4}-\d{2}-\d{3}$/.test(roundCode)) {
+      return res.status(400).json({ ok: false, error: 'ROUND_CODE_INVALID' });
+    }
+
+    try {
+      const { data: round, error: roundError } = await supabase
+        .from('monthly_draw_rounds_v3')
+        .select('id,round_code,rules_version,status,ticket_price,locked_at,drawn_at,settled_at')
+        .eq('round_code', roundCode)
+        .maybeSingle();
+      if (roundError) throw roundError;
+      if (!round || round.status !== 'SETTLED') {
+        return res.status(404).json({ ok: false, error: 'DRAW_PROOF_NOT_PUBLISHED' });
+      }
+
+      const [proofResult, snapshotResult, winnersResult] = await Promise.all([
+        supabase
+          .from('draw_proofs_v3')
+          .select('ticket_snapshot_hash,server_secret_commitment,public_entropy_source,public_entropy_reference,public_entropy_value,revealed_server_secret,derived_seed_hash,algorithm_version,committed_at,revealed_at,published_at')
+          .eq('draw_round_id', round.id)
+          .not('published_at', 'is', null)
+          .maybeSingle(),
+        supabase
+          .from('draw_ticket_snapshot_items_v3')
+          .select('ticket_id,ticket_number,public_participant_id')
+          .eq('draw_round_id', round.id)
+          .order('ticket_id', { ascending: true }),
+        supabase
+          .from('draw_winners_v3')
+          .select('ticket_id,prize_tier,rank_in_tier,amount,paid_at')
+          .eq('draw_round_id', round.id)
+          .order('prize_tier', { ascending: true })
+          .order('rank_in_tier', { ascending: true })
+      ]);
+
+      const firstError = [proofResult.error, snapshotResult.error, winnersResult.error].find(Boolean);
+      if (firstError) throw firstError;
+      if (!proofResult.data || !proofResult.data.revealed_server_secret) {
+        return res.status(404).json({ ok: false, error: 'DRAW_PROOF_NOT_PUBLISHED' });
+      }
+
+      const snapshots = snapshotResult.data || [];
+      const snapshotByTicket = new Map(snapshots.map((ticket) => [ticket.ticket_id, ticket]));
+      const winners = (winnersResult.data || []).map((winner) => {
+        const ticket = snapshotByTicket.get(winner.ticket_id);
+        if (!ticket) throw new Error('DRAW_PROOF_SNAPSHOT_MISMATCH');
+        return {
+          ticketNumber: ticket.ticket_number,
+          participantId: ticket.public_participant_id,
+          tier: winner.prize_tier,
+          rankInTier: winner.rank_in_tier,
+          amount: Number(winner.amount),
+          paidAt: winner.paid_at
+        };
+      });
+
+      res.json({
+        ok: true,
+        round: {
+          code: round.round_code,
+          rulesVersion: round.rules_version,
+          status: round.status,
+          ticketPrice: Number(round.ticket_price),
+          lockedAt: round.locked_at,
+          drawnAt: round.drawn_at,
+          settledAt: round.settled_at
+        },
+        proof: {
+          snapshotHash: proofResult.data.ticket_snapshot_hash,
+          serverSecretCommitment: proofResult.data.server_secret_commitment,
+          publicEntropySource: proofResult.data.public_entropy_source,
+          publicEntropyReference: proofResult.data.public_entropy_reference,
+          publicEntropyValue: proofResult.data.public_entropy_value,
+          revealedServerSecret: proofResult.data.revealed_server_secret,
+          derivedSeedHash: proofResult.data.derived_seed_hash,
+          algorithmVersion: proofResult.data.algorithm_version,
+          committedAt: proofResult.data.committed_at,
+          revealedAt: proofResult.data.revealed_at,
+          publishedAt: proofResult.data.published_at
+        },
+        snapshot: snapshots.map((ticket) => ({
+          ticketId: ticket.ticket_id,
+          ticketNumber: ticket.ticket_number,
+          participantId: ticket.public_participant_id
+        })),
+        winners
+      });
+    } catch (error) {
+      log('error', 'draw.proof.failed', { code: error.code, message: error.message });
+      res.status(503).json({ ok: false, error: 'DRAW_PROOF_UNAVAILABLE' });
+    }
+  });
+
   app.get('/api/me', requireTelegram, async (req, res) => {
     const id = req.telegramUser.telegramId;
     const [userResult, ticketResult, friendResult, statsResult] = await Promise.all([
