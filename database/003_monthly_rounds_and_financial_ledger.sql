@@ -202,6 +202,30 @@ create index if not exists draw_tickets_v3_round_active_idx
   on public.draw_tickets_v3(draw_round_id, owner_telegram_id)
   where state in ('ACTIVE', 'LOCKED');
 
+-- A per-round opaque participant ID lets the public verify that winners are
+-- distinct accounts without exposing Telegram IDs. The backend returns this
+-- value on a user's ticket receipt and in the public draw proof.
+create table if not exists public.draw_participants_v3 (
+  draw_round_id uuid not null references public.monthly_draw_rounds_v3(id),
+  owner_telegram_id text not null references public.users_v2(telegram_id),
+  public_participant_id uuid not null default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  primary key (draw_round_id, owner_telegram_id),
+  unique (draw_round_id, public_participant_id)
+);
+
+-- These records are created exactly when a round is locked. They are the
+-- publishable canonical list used to reproduce the snapshot hash.
+create table if not exists public.draw_ticket_snapshot_items_v3 (
+  draw_round_id uuid not null references public.monthly_draw_rounds_v3(id),
+  ticket_id uuid not null references public.draw_tickets_v3(id),
+  ticket_number text not null check (ticket_number ~ '^\d{5}$'),
+  public_participant_id uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (draw_round_id, ticket_id),
+  unique (draw_round_id, ticket_number)
+);
+
 -- Store the allocation actually used at sale time. Refunds and payouts must
 -- use these recorded values rather than recomputing from a later rules version.
 create table if not exists public.ticket_financial_allocations_v3 (
@@ -323,6 +347,8 @@ alter table public.financial_accounts_v3 enable row level security;
 alter table public.financial_transactions_v3 enable row level security;
 alter table public.financial_entries_v3 enable row level security;
 alter table public.draw_tickets_v3 enable row level security;
+alter table public.draw_participants_v3 enable row level security;
+alter table public.draw_ticket_snapshot_items_v3 enable row level security;
 alter table public.ticket_financial_allocations_v3 enable row level security;
 alter table public.affiliate_rewards_v3 enable row level security;
 alter table public.refund_requests_v3 enable row level security;
