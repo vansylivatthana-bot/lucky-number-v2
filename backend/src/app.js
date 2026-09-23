@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import crypto from 'node:crypto';
 import { createTelegramAuthMiddleware } from './telegram-auth.js';
-import { normalizePositiveAmount, normalizeTicketNumber } from './validation.js';
+import { normalizePositiveAmount } from './validation.js';
 import { log } from './logger.js';
 
 export function createApp({ config, supabase, botStatus, bot }) {
@@ -122,21 +122,48 @@ export function createApp({ config, supabase, botStatus, bot }) {
 
   app.get('/api/me', requireTelegram, async (req, res) => {
     const id = req.telegramUser.telegramId;
-    const [userResult, ticketResult, friendResult, statsResult] = await Promise.all([
+    const [userResult, friendResult, roundResult] = await Promise.all([
       supabase.from('users_v2').select('telegram_id,wallet_balance,referrer_id').eq('telegram_id', id).maybeSingle(),
-      supabase.from('tickets_v2').select('ticket_number,booked_at').eq('owner_telegram_id', id).eq('week_start', currentWeekStart()),
       supabase.from('users_v2').select('telegram_id', { count: 'exact', head: true }).eq('referrer_id', id),
-      supabase.from('tickets_v2').select('id', { count: 'exact', head: true }).eq('week_start', currentWeekStart())
+      supabase.from('monthly_draw_rounds_v3')
+        .select('id,round_code,status,ticket_price')
+        .in('status', ['OPEN', 'CLOSED', 'ROLLED_OVER', 'LOCKED'])
+        .order('opened_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
     ]);
 
-    const firstError = [userResult.error, ticketResult.error, friendResult.error, statsResult.error].find(Boolean);
+    const firstError = [userResult.error, friendResult.error, roundResult.error].find(Boolean);
     if (firstError) {
       log('error', 'api.me.failed', { code: firstError.code, message: firstError.message });
       return res.status(503).json({ ok: false, error: 'DATABASE_QUERY_FAILED' });
     }
 
-    const totalTickets = statsResult.count || 0;
-    const prizeFund = totalTickets * 5 * 0.8;
+    const round = roundResult.data;
+    const [ticketResult, roundTicketsResult] = round
+      ? await Promise.all([
+          supabase.from('draw_tickets_v3')
+            .select('ticket_number,state,booked_at')
+            .eq('owner_telegram_id', id)
+            .eq('draw_round_id', round.id)
+            .in('state', ['ACTIVE', 'LOCKED']),
+          supabase.from('draw_tickets_v3')
+            .select('price_paid')
+            .eq('draw_round_id', round.id)
+            .in('state', ['ACTIVE', 'LOCKED'])
+        ])
+      : [{ data: [], error: null }, { data: [], error: null }];
+    const ticketError = [ticketResult.error, roundTicketsResult.error].find(Boolean);
+    if (ticketError) {
+      log('error', 'api.me.v3_ticket_query_failed', { code: ticketError.code, message: ticketError.message });
+      return res.status(503).json({ ok: false, error: 'DATABASE_QUERY_FAILED' });
+    }
+
+    // This is a live estimate for display only. Actual payouts use the stored
+    // per-ticket allocations in the immutable financial ledger.
+    const standardPool = (roundTicketsResult.data || []).reduce(
+      (sum, ticket) => sum + Number(ticket.price_paid || 0) * 0.72, 0
+    );
     res.json({
       ok: true,
       user: {
@@ -146,25 +173,60 @@ export function createApp({ config, supabase, botStatus, bot }) {
       },
       friendsCount: friendResult.count || 0,
       tickets: ticketResult.data || [],
+      round: round ? {
+        code: round.round_code,
+        status: round.status,
+        ticketPrice: Number(round.ticket_price)
+      } : null,
       prizes: {
-        prize1: round2(prizeFund * 0.3),
-        prize2Each: round2((prizeFund * 0.2) / 3),
-        prize3Each: round2((prizeFund * 0.4) / 23)
+        prize1: round6(standardPool / 3),
+        prize2Each: round6((standardPool * 2 / 9) / 3),
+        prize3Each: round6((standardPool - round6(standardPool / 3) - round6(standardPool * 2 / 9)) / 23)
       }
     });
   });
 
   app.post('/api/tickets/purchase', requireTelegram, async (req, res) => {
     try {
-      const ticketNumber = normalizeTicketNumber(req.body?.ticketNumber);
-      const { data, error } = await supabase.rpc('purchase_ticket_v2', {
-        p_telegram_id: req.telegramUser.telegramId,
-        p_ticket_number: ticketNumber
-      });
-      if (error) throw error;
-      res.status(201).json({ ok: true, purchase: data });
+      const idempotencyKey = String(req.get('Idempotency-Key') || '').trim().toLowerCase();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(idempotencyKey)) {
+        return res.status(400).json({ ok: false, error: 'IDEMPOTENCY_KEY_INVALID' });
+      }
+
+      let purchase;
+      let lastError;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const ticketNumber = crypto.randomInt(0, 100000).toString().padStart(5, '0');
+        const { data, error } = await supabase.rpc('purchase_monthly_ticket_v3', {
+          p_telegram_id: req.telegramUser.telegramId,
+          p_ticket_number: ticketNumber,
+          p_idempotency_key: idempotencyKey
+        });
+        if (!error) {
+          purchase = data;
+          break;
+        }
+        lastError = error;
+        if (!String(error.message || '').includes('TICKET_ALREADY_SOLD')) throw error;
+      }
+      if (!purchase) throw lastError || new Error('TICKET_GENERATION_RETRY_EXHAUSTED');
+
+      const { data: ticket, error: ticketError } = await supabase
+        .from('draw_tickets_v3')
+        .select('id,ticket_number,draw_round_id,state,booked_at')
+        .eq('id', purchase.ticketId)
+        .maybeSingle();
+      if (ticketError || !ticket) throw ticketError || new Error('PURCHASE_TICKET_NOT_FOUND');
+      res.status(purchase.idempotent ? 200 : 201).json({ ok: true, purchase: {
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticket_number,
+        roundId: ticket.draw_round_id,
+        state: ticket.state,
+        bookedAt: ticket.booked_at,
+        idempotent: Boolean(purchase.idempotent)
+      } });
     } catch (error) {
-      const known = String(error.message || '').match(/(SALES_CLOSED|USER_NOT_FOUND|INSUFFICIENT_BALANCE|TICKET_ALREADY_SOLD|TICKET_NUMBER_INVALID)/)?.[1];
+      const known = String(error.message || '').match(/(SALES_CLOSED|USER_NOT_FOUND|INSUFFICIENT_BALANCE|TICKET_ALREADY_SOLD|TICKET_NUMBER_INVALID|TICKET_GENERATION_RETRY_EXHAUSTED)/)?.[1];
       log('error', 'ticket.purchase.failed', { code: error.code, reason: known || 'PURCHASE_FAILED' });
       res.status(known ? 409 : 503).json({ ok: false, error: known || 'PURCHASE_FAILED' });
     }
@@ -207,15 +269,4 @@ export function createApp({ config, supabase, botStatus, bot }) {
   return app;
 }
 
-function currentWeekStart() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Vientiane', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short'
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-  const date = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day)));
-  const day = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() - day + 1);
-  return date.toISOString().slice(0, 10);
-}
-
-const round2 = (value) => Math.round(value * 100) / 100;
+const round6 = (value) => Math.round(value * 1_000_000) / 1_000_000;
