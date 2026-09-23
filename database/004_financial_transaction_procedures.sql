@@ -148,6 +148,10 @@ begin
   where telegram_id = p_telegram_id
   returning wallet_balance into v_balance_after;
 
+  insert into public.draw_participants_v3(draw_round_id, owner_telegram_id)
+  values (v_round.id, p_telegram_id)
+  on conflict (draw_round_id, owner_telegram_id) do nothing;
+
   insert into public.draw_tickets_v3(
     draw_round_id, sales_period_id, owner_telegram_id, ticket_number, price_paid, purchase_transaction_id
   ) values (
