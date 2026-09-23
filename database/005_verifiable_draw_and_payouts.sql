@@ -177,7 +177,7 @@ begin
   if v_snapshot_count <> v_ticket_count then
     raise exception 'DRAW_SNAPSHOT_PARTICIPANT_MAPPING_INCOMPLETE';
   end if;
-  v_snapshot_hash := encode(digest(coalesce(v_snapshot, ''), 'sha256'), 'hex');
+  v_snapshot_hash := encode(extensions.digest(coalesce(v_snapshot, ''), 'sha256'), 'hex');
 
   insert into public.draw_proofs_v3(
     draw_round_id, ticket_snapshot_hash, server_secret_commitment, algorithm_version, committed_at
@@ -252,11 +252,11 @@ begin
 
   select * into v_proof from public.draw_proofs_v3 where draw_round_id = p_round_id for update;
   if not found then raise exception 'DRAW_PROOF_NOT_FOUND'; end if;
-  v_commitment := encode(digest(p_revealed_server_secret, 'sha256'), 'hex');
+  v_commitment := encode(extensions.digest(p_revealed_server_secret, 'sha256'), 'hex');
   if v_commitment <> v_proof.server_secret_commitment then
     raise exception 'SERVER_SECRET_COMMITMENT_MISMATCH';
   end if;
-  v_seed_hash := encode(digest(
+  v_seed_hash := encode(extensions.digest(
     p_revealed_server_secret || '|' || p_public_entropy_value || '|' || v_proof.ticket_snapshot_hash,
     'sha256'
   ), 'hex');
@@ -276,7 +276,7 @@ begin
 
   with ticket_hashes as (
     select t.id, t.owner_telegram_id,
-      encode(digest(v_seed_hash || '|' || t.id::text, 'sha256'), 'hex') as ticket_sort_key
+      encode(extensions.digest(v_seed_hash || '|' || t.id::text, 'sha256'), 'hex') as ticket_sort_key
     from public.draw_tickets_v3 t
     where t.draw_round_id = p_round_id and t.state = 'LOCKED'
   ), per_account as (
