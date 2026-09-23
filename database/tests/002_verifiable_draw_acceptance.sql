@@ -57,7 +57,7 @@ begin
   where id = v_period_id;
   perform public.close_monthly_sales_period_v3(v_period_id, 'acceptance-test');
 
-  v_commitment := encode(digest(v_secret, 'sha256'), 'hex');
+  v_commitment := encode(extensions.digest(v_secret, 'sha256'), 'hex');
   perform public.lock_monthly_draw_round_v3(v_round_id, v_commitment, 'acceptance-test');
   perform public.execute_verifiable_draw_and_settle_v3(
     v_round_id,
