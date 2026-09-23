@@ -19,6 +19,7 @@ legacy project or a production project.
 2. `003_monthly_rounds_and_financial_ledger.sql`
 3. `004_financial_transaction_procedures.sql`
 4. `005_verifiable_draw_and_payouts.sql`
+5. `006_enable_pgcrypto.sql`
 
 `001` detects whether legacy `users` and `tickets` tables exist. In a clean
 TEST project it creates the V2 compatibility tables but imports nothing.
@@ -29,7 +30,7 @@ and `tickets` tables.
 
 ## Acceptance-test order
 
-Run each test in a fresh SQL Editor query after all four migrations succeed:
+Run each test in a fresh SQL Editor query after all migrations succeed:
 
 1. `tests/001_financial_ledger_acceptance.sql`
 2. `tests/002_verifiable_draw_acceptance.sql`
