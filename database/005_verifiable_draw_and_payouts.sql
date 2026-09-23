@@ -5,6 +5,9 @@
 -- from the locked ticket snapshot, the pre-committed server secret and a
 -- declared public entropy value. No browser role can execute these functions.
 
+-- SHA-256 commitments use pgcrypto's digest() function.
+create extension if not exists pgcrypto;
+
 begin;
 
 create or replace function public.close_monthly_sales_period_v3(
