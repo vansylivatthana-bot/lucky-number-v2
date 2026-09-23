@@ -1,6 +1,6 @@
 const tg = window.Telegram?.WebApp;
 const apiBaseUrl = window.LUCKY_CONFIG?.API_BASE_URL?.replace(/\/$/, '');
-const state = { loading: false, purchaseIdempotencyKey: null };
+const state = { loading: false, purchaseIdempotencyKey: null, roundOpen: false };
 
 const el = (id) => document.getElementById(id);
 const money = (value) => `${Number(value || 0).toFixed(2)} USDT`;
@@ -49,6 +49,8 @@ function render(data) {
   el('roundInfo').textContent = data.round
     ? `ງວດ ${data.round.code} · ${data.round.status} · ປີ້ລະ ${money(data.round.ticketPrice)}`
     : 'ຍັງບໍ່ມີງວດທີ່ເປີດ';
+  state.roundOpen = data.round?.status === 'OPEN';
+  el('buyButton').disabled = state.loading || !state.roundOpen;
   el('tickets').innerHTML = data.tickets.length
     ? data.tickets.map(({ ticket_number }) => `<span class="ticket">${escapeHtml(ticket_number)}</span>`).join('')
     : '<span>ຍັງບໍ່ມີຕົວເລກ</span>';
@@ -82,7 +84,7 @@ async function purchase() {
     tg?.HapticFeedback?.notificationOccurred('error');
   } finally {
     state.loading = false;
-    el('buyButton').disabled = false;
+    el('buyButton').disabled = !state.roundOpen;
   }
 }
 
