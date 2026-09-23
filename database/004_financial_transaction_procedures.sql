@@ -37,8 +37,8 @@ begin
   insert into public.financial_entries_v3(
     transaction_id, account_code, direction, amount, reference_type
   ) values
-    (v_transaction_id, 'CUSTODY_ASSET', 'DEBIT', round(p_amount, 2), 'affiliate_advance_reserve'),
-    (v_transaction_id, 'AFFILIATE_ADVANCE_RESERVE', 'CREDIT', round(p_amount, 2), 'affiliate_advance_reserve');
+    (v_transaction_id, 'CUSTODY_ASSET', 'DEBIT', round(p_amount, 6), 'affiliate_advance_reserve'),
+    (v_transaction_id, 'AFFILIATE_ADVANCE_RESERVE', 'CREDIT', round(p_amount, 6), 'affiliate_advance_reserve');
 
   insert into public.admin_audit_log_v3(actor_telegram_id, action, target_type, target_id, reason)
   values (p_actor_telegram_id, 'FUND_AFFILIATE_ADVANCE_RESERVE', 'financial_transaction', v_transaction_id::text, 'verified custody funding');
@@ -59,16 +59,16 @@ as $$
 declare
   v_period public.monthly_sales_periods_v3%rowtype;
   v_round public.monthly_draw_rounds_v3%rowtype;
-  v_user_balance numeric(18,2);
-  v_balance_after numeric(18,2);
+  v_user_balance numeric(18,6);
+  v_balance_after numeric(18,6);
   v_referrer_id text;
   v_ticket_id uuid;
   v_transaction_id uuid;
-  v_standard_amount numeric(18,2);
-  v_jackpot_amount numeric(18,2);
-  v_operating_amount numeric(18,2);
-  v_affiliate_available numeric(18,2) := 0;
-  v_affiliate_pending numeric(18,2) := 0;
+  v_standard_amount numeric(18,6);
+  v_jackpot_amount numeric(18,6);
+  v_operating_amount numeric(18,6);
+  v_affiliate_available numeric(18,6) := 0;
+  v_affiliate_pending numeric(18,6) := 0;
 begin
   if p_telegram_id !~ '^\d{5,20}$' then raise exception 'TELEGRAM_ID_INVALID'; end if;
   if p_ticket_number !~ '^\d{5}$' then raise exception 'TICKET_NUMBER_INVALID'; end if;
@@ -118,15 +118,15 @@ begin
       and telegram_id <> p_telegram_id;
 
     if found then
-      v_affiliate_available := round(v_round.ticket_price * 0.02, 2);
-      v_affiliate_pending := round(v_round.ticket_price * 0.03, 2);
+      v_affiliate_available := round(v_round.ticket_price * 0.02, 6);
+      v_affiliate_pending := round(v_round.ticket_price * 0.03, 6);
     else
       v_referrer_id := null;
     end if;
   end if;
 
-  v_standard_amount := round(v_round.ticket_price * 0.72, 2);
-  v_jackpot_amount := round(v_round.ticket_price * 0.08, 2);
+  v_standard_amount := round(v_round.ticket_price * 0.72, 6);
+  v_jackpot_amount := round(v_round.ticket_price * 0.08, 6);
   v_operating_amount := v_round.ticket_price - v_standard_amount - v_jackpot_amount
     - v_affiliate_available - v_affiliate_pending;
 
@@ -226,9 +226,9 @@ declare
   v_reward public.affiliate_rewards_v3%rowtype;
   v_ticket public.draw_tickets_v3%rowtype;
   v_transaction_id uuid;
-  v_balance_after numeric(18,2);
-  v_reserve_balance numeric(18,2);
-  v_open_exposure numeric(18,2);
+  v_balance_after numeric(18,6);
+  v_reserve_balance numeric(18,6);
+  v_open_exposure numeric(18,6);
 begin
   if coalesce(length(trim(p_reason)), 0) < 8 then raise exception 'APPROVAL_REASON_REQUIRED'; end if;
 
@@ -319,7 +319,7 @@ declare
   v_ticket public.draw_tickets_v3%rowtype;
   v_round public.monthly_draw_rounds_v3%rowtype;
   v_transaction_id uuid;
-  v_balance_after numeric(18,2);
+  v_balance_after numeric(18,6);
 begin
   select id into v_transaction_id
   from public.financial_transactions_v3 where idempotency_key = p_idempotency_key;
@@ -391,9 +391,9 @@ declare
   v_allocation public.ticket_financial_allocations_v3%rowtype;
   v_reward public.affiliate_rewards_v3%rowtype;
   v_transaction_id uuid;
-  v_balance_after numeric(18,2);
-  v_affiliate_pending_reversal numeric(18,2) := 0;
-  v_affiliate_reserve_reversal numeric(18,2) := 0;
+  v_balance_after numeric(18,6);
+  v_affiliate_pending_reversal numeric(18,6) := 0;
+  v_affiliate_reserve_reversal numeric(18,6) := 0;
   v_has_reward boolean := false;
 begin
   if coalesce(length(trim(p_reason)), 0) < 8 then raise exception 'REFUND_REASON_REQUIRED'; end if;
@@ -407,7 +407,7 @@ begin
   if v_ticket.state <> 'ACTIVE' then raise exception 'TICKET_NOT_REFUNDABLE'; end if;
 
   select * into v_round from public.monthly_draw_rounds_v3 where id = v_ticket.draw_round_id for update;
-  if not (v_round.status = 'ROLLED_OVER' and v_round.rollover_count >= 3) then
+  if v_ticket.rollover_count_observed < 3 then
     raise exception 'ROLLOVER_REFUND_NOT_ELIGIBLE';
   end if;
 
