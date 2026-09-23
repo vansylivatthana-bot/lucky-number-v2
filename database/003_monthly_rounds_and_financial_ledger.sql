@@ -7,11 +7,21 @@
 --   * Browser clients have no table policies and no direct writes.
 --   * Only service-role backend procedures may post financial transactions.
 --   * Financial entries are append-only and every transaction must balance.
---   * All money is represented with numeric(18,2) USDT units.
+--   * Ledger money uses numeric(18,6) USDT units. The app may round only for
+--     display; stored ledger and prize amounts retain six decimal places so
+--     the P1/P2/P3 split reconciles exactly.
 
 begin;
 
 create extension if not exists pgcrypto;
+
+-- Migration 001 initially created V2 balances with two decimal places. The
+-- new ledger must retain USDT precision before any V3 transaction is posted.
+alter table public.users_v2
+  alter column wallet_balance type numeric(18,6);
+alter table public.wallet_ledger_v2
+  alter column amount type numeric(18,6),
+  alter column balance_after type numeric(18,6);
 
 -- A monthly sales period may roll into the same underlying draw round.
 create table if not exists public.monthly_draw_rounds_v3 (
@@ -22,7 +32,7 @@ create table if not exists public.monthly_draw_rounds_v3 (
     'DRAFT', 'OPEN', 'CLOSED', 'ROLLED_OVER', 'LOCKED',
     'DRAW_DELAYED', 'DRAWN', 'SETTLED', 'CANCELLED'
   )),
-  ticket_price numeric(18,2) not null default 5.00 check (ticket_price > 0),
+  ticket_price numeric(18,6) not null default 5.00 check (ticket_price > 0),
   min_eligible_tickets integer not null default 144 check (min_eligible_tickets >= 27),
   min_distinct_accounts integer not null default 27 check (min_distinct_accounts >= 27),
   opened_at timestamptz not null,
@@ -93,7 +103,7 @@ create table if not exists public.financial_entries_v3 (
   user_telegram_id text null references public.users_v2(telegram_id),
   draw_round_id uuid null references public.monthly_draw_rounds_v3(id),
   direction text not null check (direction in ('DEBIT', 'CREDIT')),
-  amount numeric(18,2) not null check (amount > 0),
+  amount numeric(18,6) not null check (amount > 0),
   reference_type text not null,
   reference_id uuid null,
   created_at timestamptz not null default now()
@@ -118,8 +128,8 @@ set search_path = public
 as $$
 declare
   v_transaction_id uuid := coalesce(new.transaction_id, old.transaction_id);
-  v_debits numeric(18,2);
-  v_credits numeric(18,2);
+  v_debits numeric(18,6);
+  v_credits numeric(18,6);
   v_entry_count integer;
 begin
   select
@@ -173,11 +183,14 @@ create table if not exists public.draw_tickets_v3 (
   sales_period_id uuid not null references public.monthly_sales_periods_v3(id),
   owner_telegram_id text not null references public.users_v2(telegram_id),
   ticket_number text not null check (ticket_number ~ '^\d{5}$'),
-  price_paid numeric(18,2) not null check (price_paid > 0),
+  price_paid numeric(18,6) not null check (price_paid > 0),
   purchase_transaction_id uuid not null unique references public.financial_transactions_v3(id),
   state text not null default 'ACTIVE' check (state in (
     'ACTIVE', 'LOCKED', 'REFUND_REQUESTED', 'REFUNDED', 'VOIDED', 'WINNER'
   )),
+  -- Counts failed scheduled closings witnessed by this particular ticket.
+  -- This prevents a ticket bought after earlier rollovers from refunding early.
+  rollover_count_observed integer not null default 0 check (rollover_count_observed >= 0),
   booked_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   unique(draw_round_id, ticket_number)
@@ -193,11 +206,11 @@ create index if not exists draw_tickets_v3_round_active_idx
 -- use these recorded values rather than recomputing from a later rules version.
 create table if not exists public.ticket_financial_allocations_v3 (
   ticket_id uuid primary key references public.draw_tickets_v3(id),
-  standard_prize_amount numeric(18,2) not null check (standard_prize_amount >= 0),
-  jackpot_amount numeric(18,2) not null check (jackpot_amount >= 0),
-  operating_amount numeric(18,2) not null check (operating_amount >= 0),
-  affiliate_available_amount numeric(18,2) not null check (affiliate_available_amount >= 0),
-  affiliate_pending_amount numeric(18,2) not null check (affiliate_pending_amount >= 0),
+  standard_prize_amount numeric(18,6) not null check (standard_prize_amount >= 0),
+  jackpot_amount numeric(18,6) not null check (jackpot_amount >= 0),
+  operating_amount numeric(18,6) not null check (operating_amount >= 0),
+  affiliate_available_amount numeric(18,6) not null check (affiliate_available_amount >= 0),
+  affiliate_pending_amount numeric(18,6) not null check (affiliate_pending_amount >= 0),
   created_at timestamptz not null default now(),
   check (
     standard_prize_amount + jackpot_amount + operating_amount +
@@ -211,8 +224,8 @@ create table if not exists public.affiliate_rewards_v3 (
   id uuid primary key default gen_random_uuid(),
   ticket_id uuid not null unique references public.draw_tickets_v3(id),
   referrer_telegram_id text not null references public.users_v2(telegram_id),
-  available_amount numeric(18,2) not null default 0.10 check (available_amount >= 0),
-  pending_amount numeric(18,2) not null default 0.15 check (pending_amount >= 0),
+  available_amount numeric(18,6) not null default 0.10 check (available_amount >= 0),
+  pending_amount numeric(18,6) not null default 0.15 check (pending_amount >= 0),
   available_status text not null default 'PENDING' check (available_status in ('PENDING', 'AVAILABLE', 'CANCELLED')),
   pending_status text not null default 'PENDING' check (pending_status in ('PENDING', 'AVAILABLE', 'CANCELLED')),
   available_transaction_id uuid null unique references public.financial_transactions_v3(id),
@@ -263,7 +276,7 @@ create table if not exists public.draw_winners_v3 (
   owner_telegram_id text not null references public.users_v2(telegram_id),
   prize_tier text not null check (prize_tier in ('P1', 'P2', 'P3')),
   rank_in_tier integer not null check (rank_in_tier > 0),
-  amount numeric(18,2) not null check (amount > 0),
+  amount numeric(18,6) not null check (amount > 0),
   payout_transaction_id uuid null unique references public.financial_transactions_v3(id),
   selected_at timestamptz not null default now(),
   paid_at timestamptz null,
