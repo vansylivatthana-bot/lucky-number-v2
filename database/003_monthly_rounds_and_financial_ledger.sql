@@ -65,7 +65,7 @@ insert into public.financial_accounts_v3(account_code, account_name, account_typ
   ('STANDARD_PRIZE_POOL', 'Standard draw prize pool liability', 'LIABILITY'),
   ('JACKPOT_RESERVE', 'Six-month jackpot reserve liability', 'LIABILITY'),
   ('AFFILIATE_PENDING', 'Pending affiliate liability', 'LIABILITY'),
-  ('AFFILIATE_ADVANCE_RESERVE', 'Reserve for released affiliate refund exposure', 'LIABILITY'),
+  ('AFFILIATE_ADVANCE_RESERVE', 'Operator-funded reserve for released affiliate refund exposure', 'EQUITY'),
   ('OPERATING_REVENUE', 'Operating and contingency revenue', 'REVENUE')
 on conflict (account_code) do nothing;
 
@@ -189,6 +189,22 @@ create index if not exists draw_tickets_v3_round_active_idx
   on public.draw_tickets_v3(draw_round_id, owner_telegram_id)
   where state in ('ACTIVE', 'LOCKED');
 
+-- Store the allocation actually used at sale time. Refunds and payouts must
+-- use these recorded values rather than recomputing from a later rules version.
+create table if not exists public.ticket_financial_allocations_v3 (
+  ticket_id uuid primary key references public.draw_tickets_v3(id),
+  standard_prize_amount numeric(18,2) not null check (standard_prize_amount >= 0),
+  jackpot_amount numeric(18,2) not null check (jackpot_amount >= 0),
+  operating_amount numeric(18,2) not null check (operating_amount >= 0),
+  affiliate_available_amount numeric(18,2) not null check (affiliate_available_amount >= 0),
+  affiliate_pending_amount numeric(18,2) not null check (affiliate_pending_amount >= 0),
+  created_at timestamptz not null default now(),
+  check (
+    standard_prize_amount + jackpot_amount + operating_amount +
+    affiliate_available_amount + affiliate_pending_amount > 0
+  )
+);
+
 -- Single-level affiliate entitlement. The first component can be released
 -- after payment settlement, while the second remains locked until draw settle.
 create table if not exists public.affiliate_rewards_v3 (
@@ -294,6 +310,7 @@ alter table public.financial_accounts_v3 enable row level security;
 alter table public.financial_transactions_v3 enable row level security;
 alter table public.financial_entries_v3 enable row level security;
 alter table public.draw_tickets_v3 enable row level security;
+alter table public.ticket_financial_allocations_v3 enable row level security;
 alter table public.affiliate_rewards_v3 enable row level security;
 alter table public.refund_requests_v3 enable row level security;
 alter table public.draw_proofs_v3 enable row level security;
@@ -305,4 +322,3 @@ alter table public.admin_audit_log_v3 enable row level security;
 -- Deliberately no anon/authenticated policies. Procedure grants are added in
 -- the next migration only after transaction procedures are tested.
 commit;
-
