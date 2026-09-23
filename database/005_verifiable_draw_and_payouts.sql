@@ -110,6 +110,7 @@ declare
   v_round public.monthly_draw_rounds_v3%rowtype;
   v_ticket_count integer;
   v_account_count integer;
+  v_snapshot_count integer;
   v_snapshot text;
   v_snapshot_hash text;
 begin
@@ -152,12 +153,27 @@ begin
     );
   end if;
 
+  insert into public.draw_ticket_snapshot_items_v3(
+    draw_round_id, ticket_id, ticket_number, public_participant_id
+  )
+  select t.draw_round_id, t.id, t.ticket_number, p.public_participant_id
+  from public.draw_tickets_v3 t
+  join public.draw_participants_v3 p
+    on p.draw_round_id = t.draw_round_id and p.owner_telegram_id = t.owner_telegram_id
+  where t.draw_round_id = p_round_id and t.state = 'ACTIVE';
+
   select string_agg(
-    id::text || '|' || ticket_number || '|' || owner_telegram_id,
-    E'\n' order by id
+    ticket_id::text || '|' || ticket_number || '|' || public_participant_id::text,
+    E'\n' order by ticket_id
   ) into v_snapshot
-  from public.draw_tickets_v3
-  where draw_round_id = p_round_id and state = 'ACTIVE';
+  from public.draw_ticket_snapshot_items_v3
+  where draw_round_id = p_round_id;
+  select count(*) into v_snapshot_count
+  from public.draw_ticket_snapshot_items_v3
+  where draw_round_id = p_round_id;
+  if v_snapshot_count <> v_ticket_count then
+    raise exception 'DRAW_SNAPSHOT_PARTICIPANT_MAPPING_INCOMPLETE';
+  end if;
   v_snapshot_hash := encode(digest(coalesce(v_snapshot, ''), 'sha256'), 'hex');
 
   insert into public.draw_proofs_v3(
@@ -419,6 +435,21 @@ drop trigger if exists draw_winners_v3_immutable on public.draw_winners_v3;
 create trigger draw_winners_v3_immutable
 before update or delete on public.draw_winners_v3
 for each row execute function public.enforce_draw_winner_immutability_v3();
+
+create or replace function public.reject_draw_snapshot_mutation_v3()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  raise exception 'DRAW_SNAPSHOT_APPEND_ONLY';
+end;
+$$;
+
+drop trigger if exists draw_ticket_snapshot_items_v3_immutable on public.draw_ticket_snapshot_items_v3;
+create trigger draw_ticket_snapshot_items_v3_immutable
+before update or delete on public.draw_ticket_snapshot_items_v3
+for each row execute function public.reject_draw_snapshot_mutation_v3();
 
 revoke all on function public.close_monthly_sales_period_v3(uuid,text) from public, anon, authenticated;
 revoke all on function public.open_rollover_sales_period_v3(uuid,date,timestamptz,timestamptz,text) from public, anon, authenticated;
