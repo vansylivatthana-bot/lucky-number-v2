@@ -52,25 +52,32 @@ create table if not exists public.draws_v2 (
   created_at timestamptz not null default now()
 );
 
--- Preserve users and balances from the legacy table. Existing V2 values win on reruns.
-insert into public.users_v2 (telegram_id, wallet_balance, referrer_id)
-select
-  u.telegram_id::text,
-  greatest(coalesce(u.wallet_balance, 0)::numeric, 0),
-  null
-from public.users u
-where u.telegram_id is not null
-on conflict (telegram_id) do nothing;
+-- Preserve users and balances only when this database contains the old
+-- system's tables. A clean staging database deliberately has no such tables.
+do $$
+begin
+  if to_regclass('public.users') is not null then
+    insert into public.users_v2 (telegram_id, wallet_balance, referrer_id)
+    select
+      u.telegram_id::text,
+      greatest(coalesce(u.wallet_balance, 0)::numeric, 0),
+      null
+    from public.users u
+    where u.telegram_id is not null
+    on conflict (telegram_id) do nothing;
 
--- Restore only valid referral relationships; orphan/self references are left null.
-update public.users_v2 target
-set referrer_id = legacy.referrer_id::text
-from public.users legacy
-join public.users_v2 referrer on referrer.telegram_id = legacy.referrer_id::text
-where target.telegram_id = legacy.telegram_id::text
-  and legacy.referrer_id is not null
-  and legacy.referrer_id::text <> legacy.telegram_id::text
-  and target.referrer_id is null;
+    -- Restore only valid referral relationships; orphan/self references are left null.
+    update public.users_v2 target
+    set referrer_id = legacy.referrer_id::text
+    from public.users legacy
+    join public.users_v2 referrer on referrer.telegram_id = legacy.referrer_id::text
+    where target.telegram_id = legacy.telegram_id::text
+      and legacy.referrer_id is not null
+      and legacy.referrer_id::text <> legacy.telegram_id::text
+      and target.referrer_id is null;
+  end if;
+end;
+$$;
 
 -- Add a migration ledger entry exactly once for each imported non-zero balance.
 insert into public.wallet_ledger_v2
@@ -92,21 +99,27 @@ where u.wallet_balance <> 0
     and l.reference_id = u.telegram_id
 );
 
--- Preserve legacy tickets. The legacy date is used to calculate its Monday week.
-insert into public.tickets_v2
-  (ticket_number, owner_telegram_id, week_start, booked_at, legacy_source)
-select
-  lpad(t.ticket_number::text, 5, '0'),
-  t.owner_telegram_id::text,
-  date_trunc('week', t."Date_book"::date)::date,
-  (t."Date_book"::text || ' ' || coalesce(t."Time_book"::text, '00:00:00') || '+07')::timestamptz,
-  true
-from public.tickets t
-join public.users_v2 u on u.telegram_id = t.owner_telegram_id::text
-where t.ticket_number is not null
-  and t."Date_book" is not null
-  and lpad(t.ticket_number::text, 5, '0') ~ '^\d{5}$'
-on conflict (week_start, ticket_number) do nothing;
+-- Preserve legacy tickets only when the legacy table exists.
+do $$
+begin
+  if to_regclass('public.tickets') is not null then
+    insert into public.tickets_v2
+      (ticket_number, owner_telegram_id, week_start, booked_at, legacy_source)
+    select
+      lpad(t.ticket_number::text, 5, '0'),
+      t.owner_telegram_id::text,
+      date_trunc('week', t."Date_book"::date)::date,
+      (t."Date_book"::text || ' ' || coalesce(t."Time_book"::text, '00:00:00') || '+07')::timestamptz,
+      true
+    from public.tickets t
+    join public.users_v2 u on u.telegram_id = t.owner_telegram_id::text
+    where t.ticket_number is not null
+      and t."Date_book" is not null
+      and lpad(t.ticket_number::text, 5, '0') ~ '^\d{5}$'
+    on conflict (week_start, ticket_number) do nothing;
+  end if;
+end;
+$$;
 
 alter table public.users_v2 enable row level security;
 alter table public.tickets_v2 enable row level security;
