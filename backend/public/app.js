@@ -23,6 +23,9 @@ const elements = {
   verifyLedger: document.querySelector('#verify-ledger'),
   verificationStatus: document.querySelector('#verification-status'),
   verificationDetail: document.querySelector('#verification-detail'),
+  checkDrawReadiness: document.querySelector('#check-draw-readiness'),
+  drawReadinessStatus: document.querySelector('#draw-readiness-status'),
+  drawReadinessDetail: document.querySelector('#draw-readiness-detail'),
   adminCredit: document.querySelector('#admin-credit'),
   adminMessage: document.querySelector('#admin-message'),
   creditDialog: document.querySelector('#credit-dialog'),
@@ -33,6 +36,7 @@ let profile;
 let purchasing = false;
 let crediting = false;
 let verifyingLedger = false;
+let checkingDrawReadiness = false;
 
 function formatMoney(value) {
   return `${Number(value || 0).toFixed(2)} USDT`;
@@ -89,6 +93,7 @@ function render(data) {
   elements.adminPanel.classList.toggle('hidden', !data.isAdmin);
   elements.adminCredit.disabled = crediting;
   elements.verifyLedger.disabled = verifyingLedger;
+  elements.checkDrawReadiness.disabled = checkingDrawReadiness;
 
   const canBuy = round?.status === 'OPEN' && Number(data.user.balance) >= Number(round.ticketPrice);
   elements.buy.disabled = !canBuy || purchasing;
@@ -163,6 +168,41 @@ async function verifyLedger() {
   }
 }
 
+function renderDrawReadiness(readiness) {
+  if (!readiness?.roundCode) {
+    elements.drawReadinessStatus.textContent = 'ບໍ່ມີງວດສຳລັບກວດ.';
+    elements.drawReadinessStatus.classList.add('error');
+    elements.drawReadinessDetail.textContent = '';
+    return;
+  }
+
+  const eligible = Boolean(readiness.eligible);
+  elements.drawReadinessStatus.textContent = eligible
+    ? 'ພ້ອມສຳລັບລັອກຮອບ ແລະ ຈັບລາງວັນ'
+    : 'ຍັງບໍ່ຄົບເກນ — ຖ້າປິດຈະ rollover';
+  elements.drawReadinessStatus.classList.toggle('error', !eligible);
+  elements.drawReadinessDetail.textContent = `${readiness.roundCode}: ${readiness.ticketCount}/${readiness.minTickets} tickets · ${readiness.accountCount}/${readiness.minAccounts} ບັນຊີ · ສະຖານະ ${statusText(readiness.status)}.`;
+}
+
+async function checkDrawReadiness() {
+  if (checkingDrawReadiness) return;
+  checkingDrawReadiness = true;
+  elements.checkDrawReadiness.disabled = true;
+  elements.drawReadinessStatus.textContent = 'ກຳລັງກວດເງື່ອນໄຂຈັບລາງວັນ…';
+  elements.drawReadinessStatus.classList.remove('error');
+  try {
+    const data = await api('/api/admin/draw-readiness');
+    renderDrawReadiness(data.readiness);
+    telegram.HapticFeedback?.notificationOccurred(data.readiness.eligible ? 'success' : 'warning');
+  } catch (error) {
+    elements.drawReadinessStatus.textContent = explainError(error.message);
+    elements.drawReadinessStatus.classList.add('error');
+  } finally {
+    checkingDrawReadiness = false;
+    if (profile) render(profile);
+  }
+}
+
 function explainError(errorCode) {
   const messages = {
     INSUFFICIENT_BALANCE: 'ຍອດເງິນບໍ່ພຽງພໍ.',
@@ -170,7 +210,8 @@ function explainError(errorCode) {
     TELEGRAM_INIT_DATA_EXPIRED: 'ເຊດຊັນໝົດອາຍຸ. ກະລຸນາປິດແລ້ວເປີດແອັບຈາກ Telegram ອີກຄັ້ງ.',
     TELEGRAM_INIT_DATA_MISSING: 'ຕ້ອງເປີດແອັບຜ່ານ Telegram.',
     PURCHASE_FAILED: 'ຊື້ບໍ່ສຳເລັດຊົ່ວຄາວ. ກະລຸນາລອງໃໝ່.',
-    LEDGER_VERIFICATION_UNAVAILABLE: 'ກວດບັນຊີບໍ່ສຳເລັດຊົ່ວຄາວ.'
+    LEDGER_VERIFICATION_UNAVAILABLE: 'ກວດບັນຊີບໍ່ສຳເລັດຊົ່ວຄາວ.',
+    DRAW_READINESS_UNAVAILABLE: 'ກວດເງື່ອນໄຂຮອບບໍ່ສຳເລັດຊົ່ວຄາວ.'
   };
   return messages[errorCode] || 'ເກີດຂໍ້ຜິດພາດ. ກະລຸນາລອງໃໝ່.';
 }
@@ -181,7 +222,7 @@ async function load() {
     const data = await api('/api/me');
     render(data);
     if (data.isAdmin) {
-      await Promise.all([loadAdminOverview(), verifyLedger()]);
+      await Promise.all([loadAdminOverview(), verifyLedger(), checkDrawReadiness()]);
     }
   } catch (error) {
     setMessage(explainError(error.message), true);
@@ -237,6 +278,7 @@ elements.confirmCredit.addEventListener('click', () => {
 });
 
 elements.verifyLedger.addEventListener('click', verifyLedger);
+elements.checkDrawReadiness.addEventListener('click', checkDrawReadiness);
 
 function boot() {
   telegram = window.Telegram?.WebApp || null;
