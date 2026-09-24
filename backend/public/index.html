@@ -51,7 +51,9 @@
               <p><span>ຍອດຂາຍ</span><strong id="admin-sales">—</strong></p>
             </div>
             <p id="admin-round" class="muted">ກຳລັງໂຫຼດ…</p>
-            <p class="admin-note">ໜ້ານີ້ເບິ່ງຂໍ້ມູນເທົ່ານັ້ນ. ການປິດງວດ ແລະ ຈັບລາງວັນ ຈະເພີ່ມຫຼັງຈາກອອກແບບຂັ້ນຕອນຢືນຢັນທີ່ປອດໄພ.</p>
+            <button id="admin-credit" class="secondary admin-credit" type="button">ເພີ່ມ Test Credit 10.00 USDT</button>
+            <p id="admin-message" class="message" aria-live="polite"></p>
+            <p class="admin-note">ເພີ່ມໄດ້ສະເພາະຍອດທົດສອບຂອງ admin ເອງ. ການປິດງວດ ແລະ ຈັບລາງວັນ ຈະເພີ່ມຫຼັງຈາກອອກແບບຂັ້ນຕອນຢືນຢັນທີ່ປອດໄພ.</p>
           </article>
         </section>
 
@@ -83,6 +85,18 @@
         <div class="dialog-actions">
           <button value="cancel" class="secondary" type="submit">ຍົກເລີກ</button>
           <button id="confirm-buy" class="primary" type="button">ຢືນຢັນຊື້</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="credit-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <p class="label">ຢືນຢັນ Test Credit</p>
+        <h2>ເພີ່ມ 10.00 USDT?</h2>
+        <p class="muted">ເພີ່ມເຂົ້າກະເປົາທົດສອບ admin ຂອງທ່ານເທົ່ານັ້ນ. ບັນທຶກທາງການເງິນແລະ audit log ຈະຖືກສ້າງທຸກຄັ້ງ.</p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary" type="submit">ຍົກເລີກ</button>
+          <button id="confirm-credit" class="primary" type="button">ຢືນຢັນເພີ່ມ</button>
         </div>
       </form>
     </dialog>
