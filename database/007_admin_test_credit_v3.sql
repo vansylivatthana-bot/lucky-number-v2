@@ -20,7 +20,7 @@ declare
   v_balance_after numeric(18,6);
   v_amount numeric(18,6);
 begin
-  if p_actor_telegram_id !~ '^\\d{5,20}$' or p_target_telegram_id !~ '^\\d{5,20}$' then
+  if p_actor_telegram_id !~ '^\d{5,20}$' or p_target_telegram_id !~ '^\d{5,20}$' then
     raise exception 'TELEGRAM_ID_INVALID';
   end if;
   if p_actor_telegram_id <> p_target_telegram_id then
