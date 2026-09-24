@@ -201,6 +201,7 @@ export function createApp({ config, supabase, botStatus, bot }) {
         firstName: req.telegramUser.firstName,
         balance: Number(userResult.data?.wallet_balance || 0)
       },
+      isAdmin: id === config.adminTelegramId,
       friendsCount: friendResult.count || 0,
       tickets: ticketResult.data || [],
       round: round ? {
@@ -214,6 +215,54 @@ export function createApp({ config, supabase, botStatus, bot }) {
         prize3Each: round6((standardPool - round6(standardPool / 3) - round6(standardPool * 2 / 9)) / 23)
       }
     });
+  });
+
+  // Admin data is protected twice: Telegram initData is verified first, then
+  // the verified Telegram ID must match the server-side administrator ID.
+  // No wallet or ticket records are returned for individual users here.
+  app.get('/api/admin/overview', requireTelegram, async (req, res) => {
+    if (req.telegramUser.telegramId !== config.adminTelegramId) {
+      return res.status(403).json({ ok: false, error: 'ADMIN_FORBIDDEN' });
+    }
+
+    try {
+      const [roundResult, userCountResult] = await Promise.all([
+        supabase.from('monthly_draw_rounds_v3')
+          .select('id,round_code,status,ticket_price,opened_at')
+          .in('status', ['OPEN', 'CLOSED', 'ROLLED_OVER', 'LOCKED'])
+          .order('opened_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase.from('users_v2').select('telegram_id', { count: 'exact', head: true })
+      ]);
+      const firstError = roundResult.error || userCountResult.error;
+      if (firstError) throw firstError;
+
+      const round = roundResult.data;
+      const ticketResult = round
+        ? await supabase.from('draw_tickets_v3')
+          .select('price_paid')
+          .eq('draw_round_id', round.id)
+          .in('state', ['ACTIVE', 'LOCKED'])
+        : { data: [], error: null };
+      if (ticketResult.error) throw ticketResult.error;
+
+      const tickets = ticketResult.data || [];
+      res.json({
+        ok: true,
+        usersCount: userCountResult.count || 0,
+        round: round ? {
+          code: round.round_code,
+          status: round.status,
+          ticketPrice: Number(round.ticket_price),
+          ticketCount: tickets.length,
+          grossSales: round6(tickets.reduce((sum, ticket) => sum + Number(ticket.price_paid || 0), 0))
+        } : null
+      });
+    } catch (error) {
+      log('error', 'admin.overview.failed', { code: error.code, message: error.message });
+      res.status(503).json({ ok: false, error: 'ADMIN_OVERVIEW_UNAVAILABLE' });
+    }
   });
 
   app.post('/api/tickets/purchase', requireTelegram, async (req, res) => {
