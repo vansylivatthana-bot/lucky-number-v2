@@ -19,11 +19,16 @@ const elements = {
   adminUsers: document.querySelector('#admin-users'),
   adminTickets: document.querySelector('#admin-tickets'),
   adminSales: document.querySelector('#admin-sales'),
-  adminRound: document.querySelector('#admin-round')
+  adminRound: document.querySelector('#admin-round'),
+  adminCredit: document.querySelector('#admin-credit'),
+  adminMessage: document.querySelector('#admin-message'),
+  creditDialog: document.querySelector('#credit-dialog'),
+  confirmCredit: document.querySelector('#confirm-credit')
 };
 
 let profile;
 let purchasing = false;
+let crediting = false;
 
 function formatMoney(value) {
   return `${Number(value || 0).toFixed(2)} USDT`;
@@ -55,6 +60,11 @@ function setMessage(text, isError = false) {
   elements.message.classList.toggle('error', isError);
 }
 
+function setAdminMessage(text, isError = false) {
+  elements.adminMessage.textContent = text;
+  elements.adminMessage.classList.toggle('error', isError);
+}
+
 function render(data) {
   profile = data;
   elements.greeting.textContent = `ສະບາຍດີ ${data.user.firstName || ''}`.trim();
@@ -73,10 +83,35 @@ function render(data) {
   }
   elements.noTickets.hidden = Boolean(data.tickets?.length);
   elements.adminPanel.classList.toggle('hidden', !data.isAdmin);
+  elements.adminCredit.disabled = crediting;
 
   const canBuy = round?.status === 'OPEN' && Number(data.user.balance) >= Number(round.ticketPrice);
   elements.buy.disabled = !canBuy || purchasing;
   elements.buy.textContent = canBuy ? `ຮັບເລກສຸ່ມ — ${formatMoney(round.ticketPrice)}` : 'ຍັງຊື້ບໍ່ໄດ້';
+}
+
+async function creditTestWallet() {
+  if (crediting) return;
+  crediting = true;
+  elements.adminCredit.disabled = true;
+  elements.confirmCredit.disabled = true;
+  setAdminMessage('ກຳລັງເພີ່ມຍອດທົດສອບ…');
+  try {
+    const result = await api('/api/admin/test-credit', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': makeIdempotencyKey() }
+    });
+    setAdminMessage(`ເພີ່ມສຳເລັດ ${formatMoney(result.credit.amount)}. ຍອດໃໝ່: ${formatMoney(result.credit.balance)}.`);
+    telegram.HapticFeedback?.notificationOccurred('success');
+    await load();
+  } catch (error) {
+    setAdminMessage(explainError(error.message), true);
+    telegram.HapticFeedback?.notificationOccurred('error');
+  } finally {
+    crediting = false;
+    elements.confirmCredit.disabled = false;
+    if (profile) render(profile);
+  }
 }
 
 async function loadAdminOverview() {
@@ -152,6 +187,15 @@ async function purchase() {
 elements.confirmBuy.addEventListener('click', () => {
   if (elements.dialog.open) elements.dialog.close();
   purchase();
+});
+
+elements.adminCredit.addEventListener('click', () => {
+  if (profile?.isAdmin) elements.creditDialog.showModal();
+});
+
+elements.confirmCredit.addEventListener('click', () => {
+  if (elements.creditDialog.open) elements.creditDialog.close();
+  creditTestWallet();
 });
 
 function boot() {
