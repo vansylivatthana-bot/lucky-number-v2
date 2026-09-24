@@ -22,6 +22,11 @@ h2 { font-size: 1.15rem; margin-bottom: .35rem; }
 .admin-grid strong { color: #fef3c7; display: block; font-size: 1.05rem; margin-top: .22rem; }
 .admin-note { color: #fcd34d; font-size: .88rem; line-height: 1.5; margin-bottom: 0; }
 .admin-credit { margin-top: .2rem; width: 100%; }
+.verification { border-top: 1px solid rgb(148 163 184 / .28); margin-top: 1rem; padding-top: 1rem; }
+.verification-status { color: #bbf7d0; font-weight: 700; margin-bottom: .35rem; }
+.verification-status.error { color: #fecaca; }
+.verification-detail { font-size: .88rem; margin-bottom: .8rem; }
+.verification button { width: 100%; }
 .balance, .stat { font-size: 1.8rem; font-weight: 750; margin-bottom: .35rem; }
 .round-card { border-color: rgb(96 165 250 / .65); }
 .status { color: #86efac; font-weight: 700; margin-bottom: .4rem; }
