@@ -27,6 +27,12 @@ export function createApp({ config, supabase, botStatus, bot }) {
       }
     }
   }));
+  // Helmet/hosting layers can otherwise leave SAMEORIGIN behind. The CSP
+  // frame-ancestors rule above is the single, allow-listed framing policy.
+  app.use((_req, res, next) => {
+    res.removeHeader('X-Frame-Options');
+    next();
+  });
   app.use(cors({
     origin: config.frontendUrl,
     methods: ['GET', 'POST'],
