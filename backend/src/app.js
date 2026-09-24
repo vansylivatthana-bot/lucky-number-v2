@@ -265,6 +265,62 @@ export function createApp({ config, supabase, botStatus, bot }) {
     }
   });
 
+  // This is a planning check only. It deliberately does not close, lock, draw
+  // or settle anything. The same thresholds are enforced again inside the
+  // database lock procedure, so a browser can never bypass them.
+  app.get('/api/admin/draw-readiness', requireTelegram, async (req, res) => {
+    if (req.telegramUser.telegramId !== config.adminTelegramId) {
+      return res.status(403).json({ ok: false, error: 'ADMIN_FORBIDDEN' });
+    }
+
+    try {
+      const roundResult = await supabase
+        .from('monthly_draw_rounds_v3')
+        .select('id,round_code,status,min_eligible_tickets,min_distinct_accounts')
+        .in('status', ['OPEN', 'CLOSED', 'ROLLED_OVER', 'LOCKED'])
+        .order('opened_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (roundResult.error) throw roundResult.error;
+
+      const round = roundResult.data;
+      if (!round) {
+        return res.json({ ok: true, readiness: { roundCode: null, status: 'NO_ACTIVE_ROUND' } });
+      }
+
+      const ticketsResult = await supabase
+        .from('draw_tickets_v3')
+        .select('owner_telegram_id')
+        .eq('draw_round_id', round.id)
+        .in('state', ['ACTIVE', 'LOCKED']);
+      if (ticketsResult.error) throw ticketsResult.error;
+
+      const tickets = ticketsResult.data || [];
+      const ticketCount = tickets.length;
+      const accountCount = new Set(tickets.map((ticket) => ticket.owner_telegram_id)).size;
+      const minTickets = Number(round.min_eligible_tickets);
+      const minAccounts = Number(round.min_distinct_accounts);
+      const eligible = ticketCount >= minTickets && accountCount >= minAccounts;
+
+      res.json({
+        ok: true,
+        readiness: {
+          roundCode: round.round_code,
+          status: round.status,
+          ticketCount,
+          accountCount,
+          minTickets,
+          minAccounts,
+          eligible,
+          nextOutcome: eligible ? 'LOCK_AND_DRAW_ELIGIBLE' : 'ROLLOVER_REQUIRED'
+        }
+      });
+    } catch (error) {
+      log('error', 'admin.draw_readiness.failed', { code: error.code, message: error.message });
+      res.status(503).json({ ok: false, error: 'DRAW_READINESS_UNAVAILABLE' });
+    }
+  });
+
   // A read-only reconciliation view for TEST operations. It deliberately
   // returns aggregate checks only: no other user's wallet or ticket details
   // are exposed to the Mini App.
