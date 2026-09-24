@@ -265,6 +265,45 @@ export function createApp({ config, supabase, botStatus, bot }) {
     }
   });
 
+  // This is deliberately limited to the authenticated administrator's own
+  // test wallet. The browser never receives a database key, and the SQL
+  // procedure records an idempotent, balanced financial transaction.
+  app.post('/api/admin/test-credit', requireTelegram, async (req, res) => {
+    if (req.telegramUser.telegramId !== config.adminTelegramId) {
+      return res.status(403).json({ ok: false, error: 'ADMIN_FORBIDDEN' });
+    }
+
+    const idempotencyKey = String(req.get('Idempotency-Key') || '').trim().toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(idempotencyKey)) {
+      return res.status(400).json({ ok: false, error: 'IDEMPOTENCY_KEY_INVALID' });
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('credit_test_wallet_v3', {
+        p_actor_telegram_id: req.telegramUser.telegramId,
+        p_target_telegram_id: req.telegramUser.telegramId,
+        p_amount: 10,
+        p_idempotency_key: idempotencyKey,
+        p_reason: 'Admin Mini App test credit'
+      });
+      if (error) throw error;
+      res.status(data?.idempotent ? 200 : 201).json({ ok: true, credit: {
+        transactionId: data.transactionId,
+        balance: Number(data.balance || 0),
+        amount: Number(data.amount || 10),
+        idempotent: Boolean(data.idempotent)
+      } });
+    } catch (error) {
+      const known = String(error.message || '').match(/(USER_NOT_FOUND|TEST_CREDIT_AMOUNT_INVALID|TEST_CREDIT_SELF_ONLY)/)?.[1];
+      log('error', 'admin.test_credit.failed', {
+        code: error.code,
+        reason: known || 'TEST_CREDIT_FAILED',
+        message: String(error.message || 'unknown error')
+      });
+      res.status(known ? 409 : 503).json({ ok: false, error: known || 'TEST_CREDIT_FAILED' });
+    }
+  });
+
   app.post('/api/tickets/purchase', requireTelegram, async (req, res) => {
     try {
       const idempotencyKey = String(req.get('Idempotency-Key') || '').trim().toLowerCase();
