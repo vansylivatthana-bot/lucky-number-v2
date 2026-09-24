@@ -14,7 +14,12 @@ const elements = {
   message: document.querySelector('#purchase-message'),
   dialog: document.querySelector('#confirm-dialog'),
   confirmText: document.querySelector('#confirm-text'),
-  confirmBuy: document.querySelector('#confirm-buy')
+  confirmBuy: document.querySelector('#confirm-buy'),
+  adminPanel: document.querySelector('#admin-panel'),
+  adminUsers: document.querySelector('#admin-users'),
+  adminTickets: document.querySelector('#admin-tickets'),
+  adminSales: document.querySelector('#admin-sales'),
+  adminRound: document.querySelector('#admin-round')
 };
 
 let profile;
@@ -67,10 +72,25 @@ function render(data) {
     elements.tickets.append(row);
   }
   elements.noTickets.hidden = Boolean(data.tickets?.length);
+  elements.adminPanel.classList.toggle('hidden', !data.isAdmin);
 
   const canBuy = round?.status === 'OPEN' && Number(data.user.balance) >= Number(round.ticketPrice);
   elements.buy.disabled = !canBuy || purchasing;
   elements.buy.textContent = canBuy ? `ຮັບເລກສຸ່ມ — ${formatMoney(round.ticketPrice)}` : 'ຍັງຊື້ບໍ່ໄດ້';
+}
+
+async function loadAdminOverview() {
+  try {
+    const data = await api('/api/admin/overview');
+    elements.adminUsers.textContent = String(data.usersCount);
+    elements.adminTickets.textContent = String(data.round?.ticketCount || 0);
+    elements.adminSales.textContent = formatMoney(data.round?.grossSales || 0);
+    elements.adminRound.textContent = data.round
+      ? `${data.round.code} · ${statusText(data.round.status)}`
+      : 'ບໍ່ມີງວດສຳລັບຄວບຄຸມ.';
+  } catch {
+    elements.adminRound.textContent = 'ບໍ່ສາມາດໂຫຼດພາບລວມ admin ໄດ້.';
+  }
 }
 
 function explainError(errorCode) {
@@ -87,7 +107,9 @@ function explainError(errorCode) {
 async function load() {
   try {
     setMessage('');
-    render(await api('/api/me'));
+    const data = await api('/api/me');
+    render(data);
+    if (data.isAdmin) await loadAdminOverview();
   } catch (error) {
     setMessage(explainError(error.message), true);
     elements.buy.disabled = true;
