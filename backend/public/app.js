@@ -100,8 +100,8 @@ elements.buy.addEventListener('click', () => {
   elements.dialog.showModal();
 });
 
-elements.dialog.addEventListener('close', async () => {
-  if (elements.dialog.returnValue !== 'confirm' || purchasing) return;
+async function purchase() {
+  if (purchasing) return;
   purchasing = true;
   elements.buy.disabled = true;
   elements.confirmBuy.disabled = true;
@@ -122,6 +122,11 @@ elements.dialog.addEventListener('close', async () => {
     purchasing = false;
     elements.confirmBuy.disabled = false;
   }
+}
+
+elements.confirmBuy.addEventListener('click', () => {
+  if (elements.dialog.open) elements.dialog.close();
+  purchase();
 });
 
 function boot() {
