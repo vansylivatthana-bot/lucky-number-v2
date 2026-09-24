@@ -121,6 +121,9 @@ async function purchase() {
   } finally {
     purchasing = false;
     elements.confirmBuy.disabled = false;
+    // load() renders while `purchasing` is still true. Render once more after
+    // clearing it so a rejected purchase never leaves the buy button disabled.
+    if (profile) render(profile);
   }
 }
 
