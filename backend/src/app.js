@@ -2,19 +2,40 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createTelegramAuthMiddleware } from './telegram-auth.js';
 import { log } from './logger.js';
 
 export function createApp({ config, supabase, botStatus, bot }) {
   const app = express();
   const requireTelegram = createTelegramAuthMiddleware(config);
+  const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
   app.disable('x-powered-by');
-  app.use(helmet({ crossOriginResourcePolicy: false }));
-  app.use(cors({ origin: config.frontendUrl, methods: ['GET', 'POST'], allowedHeaders: ['Content-Type', 'X-Telegram-Init-Data'] }));
+  app.use(helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", 'https://telegram.org'],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        frameAncestors: ["'self'", 'https://web.telegram.org', 'https://webk.telegram.org', 'https://webz.telegram.org']
+      }
+    }
+  }));
+  app.use(cors({
+    origin: config.frontendUrl,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Idempotency-Key', 'X-Telegram-Init-Data']
+  }));
   app.use(express.json({ limit: '32kb' }));
 
-  app.get('/', (_req, res) => res.json({ service: 'lucky-number-v2', status: 'running' }));
+  // The same Render service hosts the Telegram Mini App. Protected API
+  // endpoints still validate Telegram initData on the server.
+  app.use(express.static(publicDir, { index: 'index.html', fallthrough: true, maxAge: 0 }));
   app.get('/health/live', (_req, res) => res.json({ ok: true }));
   app.get('/health/ready', async (_req, res) => {
     const { error } = await supabase.from('users_v2').select('telegram_id', { head: true, count: 'exact' }).limit(1);
