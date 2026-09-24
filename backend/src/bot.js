@@ -45,8 +45,10 @@ export function createBot({ config, supabase, botStatus }) {
     const referralLink = `https://t.me/${config.botUsername}?start=${telegramId}`;
     const channelText = config.channelUrl ? `\n📢 Channel: ${config.channelUrl}` : '';
     await ctx.reply(
-      `ຍິນດີຕ້ອນຮັບສູ່ Lucky Number VIP 🎉${channelText}\n\n🤝 Link ແນະນຳຂອງທ່ານ:\n${referralLink}`,
-      Markup.keyboard([[Markup.button.webApp('📲 ເປີດແອັບຊື້ຕົວເລກ', config.frontendUrl)]]).resize()
+      `ຍິນດີຕ້ອນຮັບສູ່ Lucky Number VIP 🎉${channelText}\n\n🤝 Link ແນະນຳຂອງທ່ານ:\n${referralLink}\n\nກົດປຸ່ມສີຟ້າຂ້າງລຸ່ມເພື່ອເຂົ້າແອັບ.`,
+      Markup.inlineKeyboard([
+        Markup.button.webApp('📲 ເປີດແອັບຊື້ຕົວເລກ', config.frontendUrl)
+      ])
     );
   });
 
