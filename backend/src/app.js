@@ -15,6 +15,7 @@ export function createApp({ config, supabase, botStatus, bot }) {
   app.disable('x-powered-by');
   app.use(helmet({
     crossOriginResourcePolicy: false,
+    // Telegram Desktop embeds the Mini App in an iframe. CSP below is the\n    // framing control and explicitly allows only Telegram web clients.\n    frameguard: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
