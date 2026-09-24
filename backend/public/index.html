@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="lo">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <title>Lucky Number V2 — Test</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <p class="eyebrow">LUCKY NUMBER V2 · TEST</p>
+        <h1>ເລກນຳໂຊກ</h1>
+        <p id="greeting" class="muted">ກຳລັງເຊື່ອມຕໍ່…</p>
+      </header>
+
+      <section id="outside-telegram" class="notice hidden" role="alert">
+        ເປີດໜ້ານີ້ຜ່ານ Telegram ແລະກົດ “ເປີດແອັບຊື້ຕົວເລກ” ເພື່ອໃຊ້ງານ.
+      </section>
+
+      <section id="app-content" class="hidden">
+        <div class="grid">
+          <article class="card balance-card">
+            <p class="label">ຍອດເງິນທົດສອບ</p>
+            <p id="balance" class="balance">—</p>
+            <p class="muted">ການເພີ່ມຍອດທົດສອບ ເຮັດໂດຍ admin ເທົ່ານັ້ນ</p>
+          </article>
+          <article class="card">
+            <p class="label">ໝູ່ທີ່ແນະນຳ</p>
+            <p id="friends" class="stat">—</p>
+          </article>
+        </div>
+
+        <article class="card round-card">
+          <p class="label">ງວດປັດຈຸບັນ</p>
+          <h2 id="round-code">ບໍ່ມີງວດເປີດ</h2>
+          <p id="round-status" class="status">—</p>
+          <p id="round-price" class="muted"></p>
+        </article>
+
+        <article class="card">
+          <p class="label">ຮັບເລກສຸ່ມ 5 ຫຼັກ</p>
+          <p class="muted">ລະບົບຈະສຸ່ມເລກບໍ່ຊ້ຳກັນ ແລະຫັກຍອດຫຼັງຈາກຢືນຢັນ.</p>
+          <button id="buy-button" class="primary" type="button" disabled>ກຳລັງກວດສອບ…</button>
+          <p id="purchase-message" class="message" aria-live="polite"></p>
+        </article>
+
+        <article class="card">
+          <div class="section-heading">
+            <div>
+              <p class="label">ເລກຂອງຂ້ອຍ</p>
+              <h2>Tickets ໃນງວດນີ້</h2>
+            </div>
+          </div>
+          <ul id="tickets" class="ticket-list"></ul>
+          <p id="no-tickets" class="muted">ຍັງບໍ່ມີເລກໃນງວດນີ້.</p>
+        </article>
+      </section>
+    </main>
+
+    <dialog id="confirm-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <p class="label">ຢືນຢັນການຊື້</p>
+        <h2>ຮັບເລກສຸ່ມ 5 ຫຼັກ?</h2>
+        <p id="confirm-text" class="muted"></p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary" type="submit">ຍົກເລີກ</button>
+          <button id="confirm-buy" value="confirm" class="primary" type="submit">ຢືນຢັນຊື້</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
