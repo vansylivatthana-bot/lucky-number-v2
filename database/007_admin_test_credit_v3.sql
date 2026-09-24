@@ -35,24 +35,11 @@ begin
     raise exception 'TEST_CREDIT_AMOUNT_INVALID';
   end if;
 
-  select id into v_transaction_id
-  from public.financial_transactions_v3
-  where idempotency_key = p_idempotency_key;
-  if found then
-    return jsonb_build_object('transactionId', v_transaction_id, 'idempotent', true);
-  end if;
-
-  -- Lock the account first so balance and ledger stay consistent.
-  perform 1 from public.users_v2
-  where telegram_id = p_target_telegram_id
-  for update;
-  if not found then raise exception 'USER_NOT_FOUND'; end if;
-
   insert into public.financial_transactions_v3(
     idempotency_key, transaction_type, initiated_by, metadata
   ) values (
     p_idempotency_key, 'TOPUP_CONFIRMED', p_actor_telegram_id,
-    jsonb_build_object('testOnly', true, 'targetTelegramId', p_target_telegram_id, 'reason', trim(p_reason))
+    jsonb_build_object('testOnly', true, 'targetTelegramId', p_target_telegram_id, 'amount', v_amount, 'reason', trim(p_reason))
   ) on conflict (idempotency_key) do nothing
   returning id into v_transaction_id;
 
@@ -60,8 +47,25 @@ begin
     select id into v_transaction_id
     from public.financial_transactions_v3
     where idempotency_key = p_idempotency_key;
-    return jsonb_build_object('transactionId', v_transaction_id, 'idempotent', true);
+    select wallet_balance into v_balance_after
+    from public.users_v2
+    where telegram_id = p_target_telegram_id;
+    if not found then raise exception 'USER_NOT_FOUND'; end if;
+    return jsonb_build_object(
+      'transactionId', v_transaction_id,
+      'telegramId', p_target_telegram_id,
+      'balance', v_balance_after,
+      'amount', v_amount,
+      'idempotent', true
+    );
   end if;
+
+  -- Lock the account after winning the idempotency key. This makes the
+  -- balance update and its audit records one database transaction.
+  perform 1 from public.users_v2
+  where telegram_id = p_target_telegram_id
+  for update;
+  if not found then raise exception 'USER_NOT_FOUND'; end if;
 
   update public.users_v2
   set wallet_balance = wallet_balance + v_amount, updated_at = now()
