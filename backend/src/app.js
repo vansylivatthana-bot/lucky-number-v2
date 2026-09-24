@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import crypto from 'node:crypto';
 import { createTelegramAuthMiddleware } from './telegram-auth.js';
-import { normalizePositiveAmount } from './validation.js';
 import { log } from './logger.js';
 
 export function createApp({ config, supabase, botStatus, bot }) {
@@ -229,25 +228,6 @@ export function createApp({ config, supabase, botStatus, bot }) {
       const known = String(error.message || '').match(/(SALES_CLOSED|USER_NOT_FOUND|INSUFFICIENT_BALANCE|TICKET_ALREADY_SOLD|TICKET_NUMBER_INVALID|TICKET_GENERATION_RETRY_EXHAUSTED)/)?.[1];
       log('error', 'ticket.purchase.failed', { code: error.code, reason: known || 'PURCHASE_FAILED' });
       res.status(known ? 409 : 503).json({ ok: false, error: known || 'PURCHASE_FAILED' });
-    }
-  });
-
-  app.post('/internal/admin/topup', requireTelegram, async (req, res) => {
-    if (req.telegramUser.telegramId !== config.adminTelegramId) return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
-    try {
-      const amount = normalizePositiveAmount(req.body?.amount);
-      const targetId = String(req.body?.telegramId || '').trim();
-      if (!/^\d{5,20}$/.test(targetId)) throw new Error('TELEGRAM_ID_INVALID');
-      const { data, error } = await supabase.rpc('topup_wallet_v2', {
-        p_admin_telegram_id: req.telegramUser.telegramId,
-        p_target_telegram_id: targetId,
-        p_amount: amount
-      });
-      if (error) throw error;
-      res.json({ ok: true, result: data });
-    } catch (error) {
-      log('error', 'admin.topup.failed', { code: error.code, reason: error.message });
-      res.status(400).json({ ok: false, error: error.message || 'TOPUP_FAILED' });
     }
   });
 
