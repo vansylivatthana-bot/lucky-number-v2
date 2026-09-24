@@ -20,6 +20,9 @@ const elements = {
   adminTickets: document.querySelector('#admin-tickets'),
   adminSales: document.querySelector('#admin-sales'),
   adminRound: document.querySelector('#admin-round'),
+  verifyLedger: document.querySelector('#verify-ledger'),
+  verificationStatus: document.querySelector('#verification-status'),
+  verificationDetail: document.querySelector('#verification-detail'),
   adminCredit: document.querySelector('#admin-credit'),
   adminMessage: document.querySelector('#admin-message'),
   creditDialog: document.querySelector('#credit-dialog'),
@@ -29,6 +32,7 @@ const elements = {
 let profile;
 let purchasing = false;
 let crediting = false;
+let verifyingLedger = false;
 
 function formatMoney(value) {
   return `${Number(value || 0).toFixed(2)} USDT`;
@@ -84,6 +88,7 @@ function render(data) {
   elements.noTickets.hidden = Boolean(data.tickets?.length);
   elements.adminPanel.classList.toggle('hidden', !data.isAdmin);
   elements.adminCredit.disabled = crediting;
+  elements.verifyLedger.disabled = verifyingLedger;
 
   const canBuy = round?.status === 'OPEN' && Number(data.user.balance) >= Number(round.ticketPrice);
   elements.buy.disabled = !canBuy || purchasing;
@@ -128,13 +133,44 @@ async function loadAdminOverview() {
   }
 }
 
+function renderLedgerVerification(verification) {
+  const passed = Boolean(verification?.passed);
+  elements.verificationStatus.textContent = passed
+    ? 'ບັນຊີການຊື້ສົມດຸນ — PASS'
+    : 'ບັນຊີການຊື້ຍັງບໍ່ຜ່ານ — ກວດສອບ';
+  elements.verificationStatus.classList.toggle('error', !passed);
+  elements.verificationDetail.textContent = verification?.roundCode
+    ? `${verification.roundCode}: ${verification.balancedTicketTransactions}/${verification.ticketTransactions} transaction ສົມດຸນ · ${verification.ticketCount} tickets · ${formatMoney(verification.grossSales)} · wallet ຂອງທ່ານ ${verification.walletEntryCount} ລາຍການ.`
+    : 'ບໍ່ມີງວດສຳລັບກວດບັນຊີ.';
+}
+
+async function verifyLedger() {
+  if (verifyingLedger) return;
+  verifyingLedger = true;
+  elements.verifyLedger.disabled = true;
+  elements.verificationStatus.textContent = 'ກຳລັງກວດບັນຊີ…';
+  elements.verificationStatus.classList.remove('error');
+  try {
+    const data = await api('/api/admin/ledger-verification');
+    renderLedgerVerification(data.verification);
+    telegram.HapticFeedback?.notificationOccurred(data.verification.passed ? 'success' : 'warning');
+  } catch (error) {
+    elements.verificationStatus.textContent = explainError(error.message);
+    elements.verificationStatus.classList.add('error');
+  } finally {
+    verifyingLedger = false;
+    if (profile) render(profile);
+  }
+}
+
 function explainError(errorCode) {
   const messages = {
     INSUFFICIENT_BALANCE: 'ຍອດເງິນບໍ່ພຽງພໍ.',
     SALES_CLOSED: 'ງວດນີ້ປິດການຂາຍແລ້ວ.',
     TELEGRAM_INIT_DATA_EXPIRED: 'ເຊດຊັນໝົດອາຍຸ. ກະລຸນາປິດແລ້ວເປີດແອັບຈາກ Telegram ອີກຄັ້ງ.',
     TELEGRAM_INIT_DATA_MISSING: 'ຕ້ອງເປີດແອັບຜ່ານ Telegram.',
-    PURCHASE_FAILED: 'ຊື້ບໍ່ສຳເລັດຊົ່ວຄາວ. ກະລຸນາລອງໃໝ່.'
+    PURCHASE_FAILED: 'ຊື້ບໍ່ສຳເລັດຊົ່ວຄາວ. ກະລຸນາລອງໃໝ່.',
+    LEDGER_VERIFICATION_UNAVAILABLE: 'ກວດບັນຊີບໍ່ສຳເລັດຊົ່ວຄາວ.'
   };
   return messages[errorCode] || 'ເກີດຂໍ້ຜິດພາດ. ກະລຸນາລອງໃໝ່.';
 }
@@ -144,7 +180,9 @@ async function load() {
     setMessage('');
     const data = await api('/api/me');
     render(data);
-    if (data.isAdmin) await loadAdminOverview();
+    if (data.isAdmin) {
+      await Promise.all([loadAdminOverview(), verifyLedger()]);
+    }
   } catch (error) {
     setMessage(explainError(error.message), true);
     elements.buy.disabled = true;
@@ -197,6 +235,8 @@ elements.confirmCredit.addEventListener('click', () => {
   if (elements.creditDialog.open) elements.creditDialog.close();
   creditTestWallet();
 });
+
+elements.verifyLedger.addEventListener('click', verifyLedger);
 
 function boot() {
   telegram = window.Telegram?.WebApp || null;
