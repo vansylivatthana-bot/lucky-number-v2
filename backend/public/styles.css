@@ -15,6 +15,12 @@ h2 { font-size: 1.15rem; margin-bottom: .35rem; }
 .grid { display: grid; gap: .9rem; grid-template-columns: 1.5fr 1fr; }
 .card { background: rgb(15 23 42 / .88); border: 1px solid rgb(148 163 184 / .28); border-radius: 1rem; box-shadow: 0 1rem 2.5rem rgb(0 0 0 / .14); margin: .9rem 0; padding: 1rem; }
 .balance-card { background: linear-gradient(135deg, #14532d, #0f172a); }
+.admin-card { border-color: rgb(251 191 36 / .55); }
+.admin-grid { display: grid; gap: .6rem; grid-template-columns: repeat(3, 1fr); margin: 1rem 0; }
+.admin-grid p { background: #1e293b; border-radius: .65rem; margin: 0; padding: .7rem; }
+.admin-grid span { color: #cbd5e1; display: block; font-size: .78rem; }
+.admin-grid strong { color: #fef3c7; display: block; font-size: 1.05rem; margin-top: .22rem; }
+.admin-note { color: #fcd34d; font-size: .88rem; line-height: 1.5; margin-bottom: 0; }
 .balance, .stat { font-size: 1.8rem; font-weight: 750; margin-bottom: .35rem; }
 .round-card { border-color: rgb(96 165 250 / .65); }
 .status { color: #86efac; font-weight: 700; margin-bottom: .4rem; }
@@ -31,4 +37,4 @@ h2 { font-size: 1.15rem; margin-bottom: .35rem; }
 .confirm-dialog::backdrop { background: rgb(2 6 23 / .76); }
 .dialog-actions { display: grid; gap: .7rem; grid-template-columns: 1fr 1fr; margin-top: 1.25rem; }
 .dialog-actions .primary { width: auto; }
-@media (max-width: 23rem) { .grid { grid-template-columns: 1fr; } }
+@media (max-width: 23rem) { .grid, .admin-grid { grid-template-columns: 1fr; } }
