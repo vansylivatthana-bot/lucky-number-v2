@@ -265,6 +265,81 @@ export function createApp({ config, supabase, botStatus, bot }) {
     }
   });
 
+  // A read-only reconciliation view for TEST operations. It deliberately
+  // returns aggregate checks only: no other user's wallet or ticket details
+  // are exposed to the Mini App.
+  app.get('/api/admin/ledger-verification', requireTelegram, async (req, res) => {
+    if (req.telegramUser.telegramId !== config.adminTelegramId) {
+      return res.status(403).json({ ok: false, error: 'ADMIN_FORBIDDEN' });
+    }
+
+    try {
+      const roundResult = await supabase
+        .from('monthly_draw_rounds_v3')
+        .select('id,round_code')
+        .in('status', ['OPEN', 'CLOSED', 'ROLLED_OVER', 'LOCKED'])
+        .order('opened_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (roundResult.error) throw roundResult.error;
+
+      const round = roundResult.data;
+      const ticketResult = round
+        ? await supabase
+          .from('draw_tickets_v3')
+          .select('price_paid,purchase_transaction_id')
+          .eq('draw_round_id', round.id)
+          .in('state', ['ACTIVE', 'LOCKED'])
+        : { data: [], error: null };
+      if (ticketResult.error) throw ticketResult.error;
+
+      const tickets = ticketResult.data || [];
+      const transactionIds = tickets.map((ticket) => ticket.purchase_transaction_id).filter(Boolean);
+      const entriesResult = transactionIds.length
+        ? await supabase
+          .from('financial_entries_v3')
+          .select('transaction_id,direction,amount')
+          .in('transaction_id', transactionIds)
+        : { data: [], error: null };
+      const walletResult = await supabase
+        .from('wallet_ledger_v2')
+        .select('amount,entry_type,reference_type,created_at')
+        .eq('telegram_id', req.telegramUser.telegramId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      const firstError = entriesResult.error || walletResult.error;
+      if (firstError) throw firstError;
+
+      const totalsByTransaction = new Map();
+      for (const entry of entriesResult.data || []) {
+        const current = totalsByTransaction.get(entry.transaction_id) || { debit: 0, credit: 0 };
+        current[entry.direction === 'DEBIT' ? 'debit' : 'credit'] += Number(entry.amount || 0);
+        totalsByTransaction.set(entry.transaction_id, current);
+      }
+      const balancedTicketTransactions = transactionIds.filter((id) => {
+        const totals = totalsByTransaction.get(id);
+        return totals && round6(totals.debit) === round6(totals.credit);
+      }).length;
+      const grossSales = round6(tickets.reduce((sum, ticket) => sum + Number(ticket.price_paid || 0), 0));
+
+      res.json({
+        ok: true,
+        verification: {
+          roundCode: round?.round_code || null,
+          ticketCount: tickets.length,
+          grossSales,
+          balancedTicketTransactions,
+          ticketTransactions: transactionIds.length,
+          walletEntryCount: (walletResult.data || []).length,
+          passed: balancedTicketTransactions === transactionIds.length
+        }
+      });
+    } catch (error) {
+      log('error', 'admin.ledger_verification.failed', { code: error.code, message: error.message });
+      res.status(503).json({ ok: false, error: 'LEDGER_VERIFICATION_UNAVAILABLE' });
+    }
+  });
+
   // This is deliberately limited to the authenticated administrator's own
   // test wallet. The browser never receives a database key, and the SQL
   // procedure records an idempotent, balanced financial transaction.
