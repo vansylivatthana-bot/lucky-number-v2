@@ -1,4 +1,4 @@
-const telegram = window.Telegram?.WebApp;
+let telegram = null;
 const elements = {
   app: document.querySelector('#app-content'),
   outside: document.querySelector('#outside-telegram'),
@@ -124,12 +124,26 @@ elements.dialog.addEventListener('close', async () => {
   }
 });
 
-if (!telegram?.initData) {
-  elements.outside.classList.remove('hidden');
-  elements.greeting.textContent = 'ກະລຸນາເປີດຈາກ Telegram';
-} else {
-  telegram.ready();
-  telegram.expand();
-  elements.app.classList.remove('hidden');
-  load();
+function boot() {
+  telegram = window.Telegram?.WebApp || null;
+
+  // Tell Telegram that the Mini App is ready before reading initData.
+  telegram?.ready?.();
+  telegram?.expand?.();
+
+  // Give the Telegram client one event-loop turn to attach launch data.
+  window.setTimeout(() => {
+    if (!String(telegram?.initData || '').trim()) {
+      elements.outside.classList.remove('hidden');
+      elements.greeting.textContent = telegram
+        ? 'ບໍ່ໄດ້ຮັບການຢືນຢັນຈາກ Telegram'
+        : 'ບໍ່ພົບ Telegram Mini App';
+      return;
+    }
+
+    elements.app.classList.remove('hidden');
+    load();
+  }, 100);
 }
+
+boot();
