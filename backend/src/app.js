@@ -15,7 +15,10 @@ export function createApp({ config, supabase, botStatus, bot }) {
   app.disable('x-powered-by');
   app.use(helmet({
     crossOriginResourcePolicy: false,
-    // Telegram Desktop embeds the Mini App in an iframe. CSP below is the\n    // framing control and explicitly allows only Telegram web clients.\n    frameguard: false,
+    // Telegram Desktop embeds the Mini App in an iframe. Helmet's default
+    // X-Frame-Options: SAMEORIGIN would block that frame, so CSP below is the
+    // single framing control and explicitly allows only Telegram web clients.
+    frameguard: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -254,7 +257,11 @@ export function createApp({ config, supabase, botStatus, bot }) {
       } });
     } catch (error) {
       const known = String(error.message || '').match(/(SALES_CLOSED|USER_NOT_FOUND|INSUFFICIENT_BALANCE|TICKET_ALREADY_SOLD|TICKET_NUMBER_INVALID|TICKET_GENERATION_RETRY_EXHAUSTED)/)?.[1];
-      log('error', 'ticket.purchase.failed', { code: error.code, reason: known || 'PURCHASE_FAILED' });
+      log('error', 'ticket.purchase.failed', {
+        code: error.code,
+        reason: known || 'PURCHASE_FAILED',
+        message: String(error.message || 'unknown error')
+      });
       res.status(known ? 409 : 503).json({ ok: false, error: known || 'PURCHASE_FAILED' });
     }
   });
