@@ -1,6 +1,6 @@
 const tg = window.Telegram?.WebApp;
 const apiBaseUrl = window.LUCKY_CONFIG?.API_BASE_URL?.replace(/\/$/, '');
-const state = { loading: false };
+const state = { loading: false, purchaseIdempotencyKey: null, roundOpen: false };
 
 const el = (id) => document.getElementById(id);
 const money = (value) => `${Number(value || 0).toFixed(2)} USDT`;
@@ -46,6 +46,11 @@ function render(data) {
   el('prize2').textContent = money(data.prizes.prize2Each);
   el('prize3').textContent = money(data.prizes.prize3Each);
   el('friendsCount').textContent = data.friendsCount;
+  el('roundInfo').textContent = data.round
+    ? `ງວດ ${data.round.code} · ${data.round.status} · ປີ້ລະ ${money(data.round.ticketPrice)}`
+    : 'ຍັງບໍ່ມີງວດທີ່ເປີດ';
+  state.roundOpen = data.round?.status === 'OPEN';
+  el('buyButton').disabled = state.loading || !state.roundOpen;
   el('tickets').innerHTML = data.tickets.length
     ? data.tickets.map(({ ticket_number }) => `<span class="ticket">${escapeHtml(ticket_number)}</span>`).join('')
     : '<span>ຍັງບໍ່ມີຕົວເລກ</span>';
@@ -53,30 +58,44 @@ function render(data) {
 
 async function purchase() {
   if (state.loading) return;
-  const ticketNumber = el('ticketNumber').value.trim();
-  if (!/^\d{5}$/.test(ticketNumber)) return setMessage('ກະລຸນາປ້ອນໝາຍເລກ 5 ຫຼັກ.');
-  if (!confirm(`ຢືນຢັນຊື້ໝາຍເລກ ${ticketNumber} ລາຄາ 5 USDT?`)) return;
+  if (!confirm('ຢືນຢັນຊື້ປີ້ສຸ່ມລາຄາ 5 USDT? ເຊີບເວີຈະອອກເລກໃຫ້.')) return;
 
   state.loading = true;
+  state.purchaseIdempotencyKey ||= createIdempotencyKey();
   el('buyButton').disabled = true;
   setMessage('ກຳລັງດຳເນີນການ…', true);
   try {
-    const data = await api('/api/tickets/purchase', { method: 'POST', body: JSON.stringify({ ticketNumber }) });
+    const data = await api('/api/tickets/purchase', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': state.purchaseIdempotencyKey },
+      body: JSON.stringify({})
+    });
     setMessage(`ຊື້ ${data.purchase.ticketNumber} ສຳເລັດ!`, true);
+    state.purchaseIdempotencyKey = null;
     tg?.HapticFeedback?.notificationOccurred('success');
     await load();
   } catch (error) {
     const messages = {
       INSUFFICIENT_BALANCE: 'ຍອດເງິນບໍ່ພຽງພໍ.',
-      TICKET_ALREADY_SOLD: 'ຕົວເລກນີ້ຖືກຊື້ແລ້ວ.',
-      SALES_CLOSED: 'ປິດຮັບຊື້ສຳລັບອາທິດນີ້ແລ້ວ.'
+      SALES_CLOSED: 'ປິດຮັບຊື້ສຳລັບງວດນີ້ແລ້ວ.'
     };
+    if (messages[error.message]) state.purchaseIdempotencyKey = null;
     setMessage(messages[error.message] || `ຊື້ບໍ່ສຳເລັດ: ${error.message}`);
     tg?.HapticFeedback?.notificationOccurred('error');
   } finally {
     state.loading = false;
-    el('buyButton').disabled = false;
+    el('buyButton').disabled = !state.roundOpen;
   }
+}
+
+function createIdempotencyKey() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function escapeHtml(value) {
@@ -85,9 +104,5 @@ function escapeHtml(value) {
   return node.innerHTML;
 }
 
-el('ticketNumber').addEventListener('input', (event) => {
-  event.target.value = event.target.value.replace(/\D/g, '').slice(0, 5);
-});
 el('buyButton').addEventListener('click', purchase);
 void load();
-

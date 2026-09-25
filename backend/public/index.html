@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="lo">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <title>Lucky Number V2 — Test</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <p class="eyebrow">LUCKY NUMBER V2 · TEST</p>
+        <h1>ເລກນຳໂຊກ</h1>
+        <p id="greeting" class="muted">ກຳລັງເຊື່ອມຕໍ່…</p>
+        <a class="public-link" href="/draw.html" target="_blank" rel="noreferrer">ເຂົ້າຫ້ອງລຸ້ນລາງວັນສາທາລະນະ</a>
+      </header>
+
+      <section id="outside-telegram" class="notice hidden" role="alert">
+        ເປີດໜ້ານີ້ຜ່ານ Telegram ແລະກົດ “ເປີດແອັບຊື້ຕົວເລກ” ເພື່ອໃຊ້ງານ.
+      </section>
+
+      <section id="app-content" class="hidden">
+        <div class="grid">
+          <article class="card balance-card">
+            <p class="label">ຍອດເງິນທົດສອບ</p>
+            <p id="balance" class="balance">—</p>
+            <p class="muted">ການເພີ່ມຍອດທົດສອບ ເຮັດໂດຍ admin ເທົ່ານັ້ນ</p>
+          </article>
+          <article class="card">
+            <p class="label">ໝູ່ທີ່ແນະນຳ</p>
+            <p id="friends" class="stat">—</p>
+          </article>
+        </div>
+
+        <article class="card round-card">
+          <p class="label">ງວດປັດຈຸບັນ</p>
+          <h2 id="round-code">ບໍ່ມີງວດເປີດ</h2>
+          <p id="round-status" class="status">—</p>
+          <p id="round-price" class="muted"></p>
+        </article>
+
+        <section id="admin-panel" class="admin-panel hidden" aria-label="Admin Control">
+          <article class="card admin-card">
+            <p class="label">Admin Control · Test</p>
+            <h2>ພາບລວມຜູ້ຄວບຄຸມ</h2>
+            <div class="admin-grid">
+              <p><span>ຜູ້ໃຊ້</span><strong id="admin-users">—</strong></p>
+              <p><span>ປີ້ໃນງວດ</span><strong id="admin-tickets">—</strong></p>
+              <p><span>ຍອດຂາຍ</span><strong id="admin-sales">—</strong></p>
+            </div>
+            <p id="admin-round" class="muted">ກຳລັງໂຫຼດ…</p>
+            <section class="verification" aria-label="Ledger verification">
+              <p class="label">Ledger Verification · Test</p>
+              <p id="verification-status" class="verification-status">ກຳລັງກວດບັນຊີ…</p>
+              <p id="verification-detail" class="muted verification-detail"></p>
+              <button id="verify-ledger" class="secondary" type="button">ກວດບັນຊີທົດສອບ</button>
+            </section>
+            <section class="verification" aria-label="Draw readiness">
+              <p class="label">Draw Readiness · Test</p>
+              <p id="draw-readiness-status" class="verification-status">ກຳລັງກວດເງື່ອນໄຂຈັບລາງວັນ…</p>
+              <p id="draw-readiness-detail" class="muted verification-detail"></p>
+              <button id="check-draw-readiness" class="secondary" type="button">ກວດເງື່ອນໄຂຮອບ</button>
+            </section>
+            <section class="verification" aria-label="Draw controls">
+              <p class="label">Draw Control · Test</p>
+              <p id="draw-control-status" class="verification-status">ກຳລັງກວດສອບ…</p>
+              <p id="draw-control-detail" class="muted verification-detail"></p>
+              <div class="draw-actions">
+                <button id="lock-draw" class="secondary" type="button" disabled>Lock ບັນຊີ Tickets</button>
+                <button id="settle-draw" class="primary" type="button" disabled>ຈັບ ແລະ ຈ່າຍລາງວັນ</button>
+              </div>
+            </section>
+            <button id="admin-credit" class="secondary admin-credit" type="button">ເພີ່ມ Test Credit 10.00 USDT</button>
+            <p id="admin-message" class="message" aria-live="polite"></p>
+            <p class="admin-note">ການກວດນີ້ເປັນ read-only ແລະບໍ່ເປີດເຜີຍຍອດຂອງຜູ້ໃຊ້ອື່ນ. ເພີ່ມໄດ້ສະເພາະຍອດທົດສອບຂອງ admin ເອງ.</p>
+          </article>
+        </section>
+
+        <article class="card">
+          <p class="label">ຮັບເລກສຸ່ມ 5 ຫຼັກ</p>
+          <p class="muted">ລະບົບຈະສຸ່ມເລກບໍ່ຊ້ຳກັນ ແລະຫັກຍອດຫຼັງຈາກຢືນຢັນ.</p>
+          <button id="buy-button" class="primary" type="button" disabled>ກຳລັງກວດສອບ…</button>
+          <p id="purchase-message" class="message" aria-live="polite"></p>
+        </article>
+
+        <article class="card">
+          <div class="section-heading">
+            <div>
+              <p class="label">ເລກຂອງຂ້ອຍ</p>
+              <h2>Tickets ໃນງວດນີ້</h2>
+            </div>
+          </div>
+          <ul id="tickets" class="ticket-list"></ul>
+          <p id="no-tickets" class="muted">ຍັງບໍ່ມີເລກໃນງວດນີ້.</p>
+        </article>
+      </section>
+    </main>
+
+    <dialog id="confirm-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <p class="label">ຢືນຢັນການຊື້</p>
+        <h2>ຮັບເລກສຸ່ມ 5 ຫຼັກ?</h2>
+        <p id="confirm-text" class="muted"></p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary" type="submit">ຍົກເລີກ</button>
+          <button id="confirm-buy" class="primary" type="button">ຢືນຢັນຊື້</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="credit-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <p class="label">ຢືນຢັນ Test Credit</p>
+        <h2>ເພີ່ມ 10.00 USDT?</h2>
+        <p class="muted">ເພີ່ມເຂົ້າກະເປົາທົດສອບ admin ຂອງທ່ານເທົ່ານັ້ນ. ບັນທຶກທາງການເງິນແລະ audit log ຈະຖືກສ້າງທຸກຄັ້ງ.</p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary" type="submit">ຍົກເລີກ</button>
+          <button id="confirm-credit" class="primary" type="button">ຢືນຢັນເພີ່ມ</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="lock-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <p class="label">ຂັ້ນທີ 1: Lock Draw</p>
+        <h2>ລັອກບັນຊີ Tickets?</h2>
+        <p class="muted">ຫຼັງ lock ແລ້ວ tickets ຈະແກ້ໄຂບໍ່ໄດ້. ລະບົບຈະບັນທຶກ snapshot hash ແລະ secret commitment ໃນ Public Draw Room.</p>
+        <label class="confirm-label">ພິມ <strong id="lock-confirmation-example"></strong>
+          <input id="lock-confirmation" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary" type="submit">ຍົກເລີກ</button>
+          <button id="confirm-lock" class="primary" type="button">ຢືນຢັນ Lock</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settle-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <p class="label">ຂັ້ນທີ 2: Settle Draw</p>
+        <h2>ຈັບ ແລະ ຈ່າຍລາງວັນ?</h2>
+        <p class="muted">ໃຊ້ NIST Randomness Beacon ທີ່ເຜີຍແຜ່ແລ້ວ. ກະລຸນາໃສ່ reference ແລະ value ໃຫ້ກວດຄືນໄດ້.</p>
+        <label class="confirm-label">NIST reference
+          <input id="entropy-reference" autocomplete="off" spellcheck="false" placeholder="ຕົວຢ່າງ: chain index / URL">
+        </label>
+        <label class="confirm-label">NIST value
+          <input id="entropy-value" autocomplete="off" spellcheck="false" placeholder="ຄ່າ random value ທີ່ເຜີຍແຜ່ແລ້ວ">
+        </label>
+        <label class="confirm-label">ພິມ <strong id="settle-confirmation-example"></strong>
+          <input id="settle-confirmation" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary" type="submit">ຍົກເລກ</button>
+          <button id="confirm-settle" class="primary" type="button">ຢືນຢັນ Settle</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
