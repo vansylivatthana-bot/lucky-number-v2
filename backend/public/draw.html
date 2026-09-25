@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="lo">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <title>Lucky Number V2 — Draw Room</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script defer src="/draw.js"></script>
+  </head>
+  <body>
+    <main class="app-shell draw-room">
+      <header class="hero">
+        <p class="eyebrow">LUCKY NUMBER V2 · PUBLIC DRAW ROOM</p>
+        <h1>ຫ້ອງລຸ້ນລາງວັນ</h1>
+        <p class="muted">ທຸກຄົນເບິ່ງສະຖານະ ແລະ proof ດຽວກັນໄດ້.</p>
+      </header>
+
+      <article class="card round-card">
+        <p class="label">ງວດກຳລັງຕິດຕາມ</p>
+        <h2 id="room-round">ກຳລັງໂຫຼດ…</h2>
+        <p id="room-status" class="status"></p>
+        <p id="room-message" class="muted"></p>
+      </article>
+
+      <div class="grid">
+        <article class="card"><p class="label">Tickets</p><p id="room-tickets" class="stat">—</p></article>
+        <article class="card"><p class="label">ຜູ້ຮ່ວມ</p><p id="room-accounts" class="stat">—</p></article>
+      </div>
+
+      <article class="card" aria-live="polite">
+        <p class="label">ຄວາມໂປ່ງໃສຂອງການສຸ່ມ</p>
+        <p id="commitment-state" class="verification-status">ກຳລັງໂຫຼດ…</p>
+        <dl id="proof-details" class="proof-details"></dl>
+        <p class="admin-note">ຜົນບໍ່ໄດ້ຕັດສິນຈາກຮູບວົງລໍ້. ລະບົບໃຊ້ ticket snapshot ທີ່ລັອກແລ້ວ, server secret commitment ແລະ public entropy ທີ່ກວດຄືນໄດ້.</p>
+      </article>
+
+      <article id="winner-card" class="card hidden">
+        <p class="label">ຜົນການຈັບລາງວັນ</p>
+        <p id="winner-summary" class="verification-status"></p>
+        <ul id="winner-list" class="ticket-list"></ul>
+        <a id="proof-link" class="public-link" target="_blank" rel="noreferrer">ເບິ່ງ Proof ເຕັມ</a>
+      </article>
+    </main>
+  </body>
+</html>
