@@ -22,6 +22,10 @@ export function loadConfig(env = process.env) {
   if (!/^[A-Za-z0-9_-]{16,256}$/.test(webhookSecret)) {
     throw new Error('TELEGRAM_WEBHOOK_SECRET must be 16-256 characters using A-Z, a-z, 0-9, _ or -');
   }
+  const schedulerSecret = String(env.SCHEDULER_SECRET || '').trim();
+  if (schedulerSecret && schedulerSecret.length < 32) {
+    throw new Error('SCHEDULER_SECRET must be at least 32 characters when configured');
+  }
 
   return Object.freeze({
     nodeEnv: String(env.NODE_ENV || 'production').trim(),
@@ -38,6 +42,9 @@ export function loadConfig(env = process.env) {
     // Optional until the admin enables an actual lock/draw. It must be a
     // base64-encoded 32-byte AES-256-GCM key and is never sent to browsers.
     drawSecretEncryptionKey: String(env.DRAW_SECRET_ENCRYPTION_KEY || '').trim(),
+    // Separate credential used only by a Render Cron Job to close a due sales
+    // period. It is not a Telegram or browser credential.
+    schedulerSecret,
     initDataMaxAgeSeconds: Number(env.TELEGRAM_INIT_DATA_MAX_AGE_SECONDS || 86400)
   });
 }
