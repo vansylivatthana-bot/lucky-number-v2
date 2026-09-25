@@ -53,6 +53,43 @@ export function createApp({ config, supabase, botStatus, bot }) {
     res.status(ready ? 200 : 503).json({ ok: ready, database: !error, telegram: botStatus.webhookReady });
   });
 
+  // Render Cron calls this endpoint after the configured sales-close time.
+  // It cannot lock, draw, settle, credit wallets, or reveal any draw data.
+  // The database function independently refuses early closure.
+  app.post('/internal/sales-periods/close-due', async (req, res) => {
+    if (!validSchedulerRequest(req, config.schedulerSecret)) {
+      return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    }
+
+    try {
+      const { data: periods, error: periodError } = await supabase
+        .from('monthly_sales_periods_v3')
+        .select('id')
+        .eq('status', 'OPEN')
+        .lte('closes_at', new Date().toISOString())
+        .order('closes_at', { ascending: true })
+        .limit(10);
+      if (periodError) throw periodError;
+
+      let closedCount = 0;
+      for (const period of periods || []) {
+        const { error } = await supabase.rpc('close_monthly_sales_period_v3', {
+          p_sales_period_id: period.id,
+          // A scheduled process is not a Telegram user. The audit record
+          // remains explicit through its action/reason, and actor is NULL.
+          p_actor_telegram_id: null
+        });
+        if (error) throw error;
+        closedCount += 1;
+      }
+      log('info', 'scheduler.sales_periods.closed', { closedCount });
+      res.json({ ok: true, closedCount });
+    } catch (error) {
+      log('error', 'scheduler.sales_periods.close_failed', { code: error.code, message: error.message });
+      res.status(503).json({ ok: false, error: 'SCHEDULED_CLOSE_FAILED' });
+    }
+  });
+
   // Public, aggregate-only draw room. It is deliberately available without
   // Telegram authentication so every participant can follow the same state.
   // It never returns Telegram IDs, wallets or secret material before settle.
@@ -701,6 +738,14 @@ function drawSecretKey(encoded) {
   const key = Buffer.from(encoded, 'base64');
   if (key.length !== 32) throw new Error('DRAW_SECRET_KEY_INVALID');
   return key;
+}
+
+function validSchedulerRequest(req, expectedSecret) {
+  if (!expectedSecret) return false;
+  const supplied = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  const expected = Buffer.from(expectedSecret);
+  const candidate = Buffer.from(supplied);
+  return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
 }
 
 function encryptDrawSecret(secret, key) {
