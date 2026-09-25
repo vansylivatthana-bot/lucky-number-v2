@@ -321,6 +321,132 @@ export function createApp({ config, supabase, botStatus, bot }) {
     }
   });
 
+  // The close action is intentionally absent here. Sales close only through
+  // the scheduled database rule, and a lock can only happen once readiness
+  // has been satisfied. This endpoint prepares an encrypted secret escrow
+  // and commits its hash with the immutable ticket snapshot.
+  app.post('/api/admin/draws/lock', requireTelegram, async (req, res) => {
+    if (req.telegramUser.telegramId !== config.adminTelegramId) {
+      return res.status(403).json({ ok: false, error: 'ADMIN_FORBIDDEN' });
+    }
+
+    const roundCode = String(req.body?.roundCode || '').trim();
+    const confirmation = String(req.body?.confirmation || '').trim();
+    if (!/^DR-\d{4}-\d{2}-\d{3}$/.test(roundCode) || confirmation !== `LOCK ${roundCode}`) {
+      return res.status(400).json({ ok: false, error: 'DRAW_LOCK_CONFIRMATION_INVALID' });
+    }
+
+    try {
+      const key = drawSecretKey(config.drawSecretEncryptionKey);
+      if (!key) return res.status(409).json({ ok: false, error: 'DRAW_SECRET_KEY_NOT_CONFIGURED' });
+      const { data: round, error: roundError } = await supabase
+        .from('monthly_draw_rounds_v3')
+        .select('id,status')
+        .eq('round_code', roundCode)
+        .maybeSingle();
+      if (roundError) throw roundError;
+      if (!round) return res.status(404).json({ ok: false, error: 'ROUND_NOT_FOUND' });
+
+      let secret;
+      let escrow;
+      if (round.status === 'LOCKED') {
+        const { data: existingEscrow, error: escrowError } = await supabase
+          .from('draw_secret_escrow_v3')
+          .select('ciphertext,iv,auth_tag')
+          .eq('draw_round_id', round.id)
+          .maybeSingle();
+        if (escrowError) throw escrowError;
+        if (!existingEscrow) return res.status(409).json({ ok: false, error: 'DRAW_SECRET_ESCROW_MISSING' });
+        secret = decryptDrawSecret(existingEscrow, key);
+        escrow = existingEscrow;
+      } else {
+        secret = crypto.randomBytes(32).toString('base64url');
+        escrow = encryptDrawSecret(secret, key);
+      }
+      const commitment = crypto.createHash('sha256').update(secret).digest('hex');
+      const { data, error } = await supabase.rpc('lock_monthly_draw_round_with_escrow_v3', {
+        p_round_id: round.id,
+        p_server_secret_commitment: commitment,
+        p_ciphertext: escrow.ciphertext,
+        p_iv: escrow.iv,
+        p_auth_tag: escrow.authTag,
+        p_actor_telegram_id: req.telegramUser.telegramId
+      });
+      if (error) throw error;
+      res.json({ ok: true, lock: {
+        roundCode,
+        status: data?.status,
+        eligibleTickets: Number(data?.eligibleTickets || 0),
+        distinctAccounts: Number(data?.distinctAccounts || 0),
+        idempotent: Boolean(data?.idempotent)
+      } });
+    } catch (error) {
+      const known = String(error.message || '').match(/(ROUND_NOT_READY_TO_LOCK|DRAW_SECRET_ESCROW_MISSING|DRAW_SECRET_COMMITMENT_MISMATCH)/)?.[1];
+      log('error', 'admin.draw.lock.failed', { code: error.code, reason: known || 'DRAW_LOCK_FAILED', message: error.message });
+      res.status(known ? 409 : 503).json({ ok: false, error: known || 'DRAW_LOCK_FAILED' });
+    }
+  });
+
+  // Settlement accepts public entropy supplied by the administrator. The
+  // encrypted secret is read only after the round is already immutable/LOCKED.
+  app.post('/api/admin/draws/settle', requireTelegram, async (req, res) => {
+    if (req.telegramUser.telegramId !== config.adminTelegramId) {
+      return res.status(403).json({ ok: false, error: 'ADMIN_FORBIDDEN' });
+    }
+
+    const roundCode = String(req.body?.roundCode || '').trim();
+    const confirmation = String(req.body?.confirmation || '').trim();
+    const entropyReference = String(req.body?.entropyReference || '').trim();
+    const entropyValue = String(req.body?.entropyValue || '').trim();
+    if (!/^DR-\d{4}-\d{2}-\d{3}$/.test(roundCode) || confirmation !== `SETTLE ${roundCode}`) {
+      return res.status(400).json({ ok: false, error: 'DRAW_SETTLE_CONFIRMATION_INVALID' });
+    }
+
+    try {
+      const key = drawSecretKey(config.drawSecretEncryptionKey);
+      if (!key) return res.status(409).json({ ok: false, error: 'DRAW_SECRET_KEY_NOT_CONFIGURED' });
+      const { data: round, error: roundError } = await supabase
+        .from('monthly_draw_rounds_v3')
+        .select('id,status')
+        .eq('round_code', roundCode)
+        .maybeSingle();
+      if (roundError) throw roundError;
+      if (!round) return res.status(404).json({ ok: false, error: 'ROUND_NOT_FOUND' });
+      if (round.status !== 'LOCKED') return res.status(409).json({ ok: false, error: 'ROUND_NOT_LOCKED' });
+
+      const { data: escrow, error: escrowError } = await supabase
+        .from('draw_secret_escrow_v3')
+        .select('ciphertext,iv,auth_tag')
+        .eq('draw_round_id', round.id)
+        .maybeSingle();
+      if (escrowError) throw escrowError;
+      if (!escrow) return res.status(409).json({ ok: false, error: 'DRAW_SECRET_ESCROW_MISSING' });
+
+      const secret = decryptDrawSecret(escrow, key);
+      const { data, error } = await supabase.rpc('execute_verifiable_draw_and_settle_v3', {
+        p_round_id: round.id,
+        p_revealed_server_secret: secret,
+        p_public_entropy_source: 'NIST_BEACON_V2',
+        p_public_entropy_reference: entropyReference,
+        p_public_entropy_value: entropyValue,
+        p_actor_telegram_id: req.telegramUser.telegramId
+      });
+      if (error) throw error;
+      res.json({ ok: true, settlement: {
+        roundCode,
+        status: data?.status,
+        winnerCount: Number(data?.winnerCount || 0),
+        prizePool: Number(data?.prizePool || 0),
+        derivedSeedHash: data?.derivedSeedHash || null,
+        idempotent: Boolean(data?.idempotent)
+      } });
+    } catch (error) {
+      const known = String(error.message || '').match(/(ROUND_NOT_LOCKED|DRAW_SECRET_ESCROW_MISSING|PUBLIC_ENTROPY_NOT_VERIFIABLE|SERVER_SECRET_COMMITMENT_MISMATCH)/)?.[1];
+      log('error', 'admin.draw.settle.failed', { code: error.code, reason: known || 'DRAW_SETTLE_FAILED', message: error.message });
+      res.status(known ? 409 : 503).json({ ok: false, error: known || 'DRAW_SETTLE_FAILED' });
+    }
+  });
+
   // A read-only reconciliation view for TEST operations. It deliberately
   // returns aggregate checks only: no other user's wallet or ticket details
   // are exposed to the Mini App.
@@ -504,3 +630,30 @@ export function createApp({ config, supabase, botStatus, bot }) {
 }
 
 const round6 = (value) => Math.round(value * 1_000_000) / 1_000_000;
+
+function drawSecretKey(encoded) {
+  if (!encoded) return null;
+  const key = Buffer.from(encoded, 'base64');
+  if (key.length !== 32) throw new Error('DRAW_SECRET_KEY_INVALID');
+  return key;
+}
+
+function encryptDrawSecret(secret, key) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ciphertext = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
+  return {
+    ciphertext: ciphertext.toString('base64'),
+    iv: iv.toString('base64'),
+    authTag: cipher.getAuthTag().toString('base64')
+  };
+}
+
+function decryptDrawSecret(escrow, key) {
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(escrow.iv, 'base64'));
+  decipher.setAuthTag(Buffer.from(escrow.auth_tag, 'base64'));
+  return Buffer.concat([
+    decipher.update(Buffer.from(escrow.ciphertext, 'base64')),
+    decipher.final()
+  ]).toString('utf8');
+}
