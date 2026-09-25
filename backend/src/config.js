@@ -35,6 +35,9 @@ export function loadConfig(env = process.env) {
     adminTelegramId: String(env.ADMIN_TELEGRAM_ID).trim(),
     supabaseUrl: String(env.SUPABASE_URL).trim().replace(/\/$/, ''),
     supabaseServiceRoleKey: String(env.SUPABASE_SERVICE_ROLE_KEY).trim(),
+    // Optional until the admin enables an actual lock/draw. It must be a
+    // base64-encoded 32-byte AES-256-GCM key and is never sent to browsers.
+    drawSecretEncryptionKey: String(env.DRAW_SECRET_ENCRYPTION_KEY || '').trim(),
     initDataMaxAgeSeconds: Number(env.TELEGRAM_INIT_DATA_MAX_AGE_SECONDS || 86400)
   });
 }
