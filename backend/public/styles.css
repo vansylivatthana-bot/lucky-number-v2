@@ -21,6 +21,10 @@ h2 { font-size: 1.15rem; margin-bottom: .35rem; }
 .admin-grid span { color: #cbd5e1; display: block; font-size: .78rem; }
 .admin-grid strong { color: #fef3c7; display: block; font-size: 1.05rem; margin-top: .22rem; }
 .admin-note { color: #fcd34d; font-size: .88rem; line-height: 1.5; margin-bottom: 0; }
+.public-link { color: #93c5fd; display: inline-block; font-weight: 700; margin-top: .35rem; text-decoration: underline; }
+.proof-details { display: grid; gap: .35rem .8rem; grid-template-columns: max-content minmax(0, 1fr); margin: .8rem 0; }
+.proof-details dt { color: #94a3b8; font-size: .82rem; }
+.proof-details dd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; overflow-wrap: anywhere; }
 .admin-credit { margin-top: .2rem; width: 100%; }
 .verification { border-top: 1px solid rgb(148 163 184 / .28); margin-top: 1rem; padding-top: 1rem; }
 .verification-status { color: #bbf7d0; font-weight: 700; margin-bottom: .35rem; }
