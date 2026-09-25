@@ -204,7 +204,10 @@ function renderDrawReadiness(readiness) {
 function renderDrawControls() {
   const readiness = drawReadiness;
   const roundCode = readiness?.roundCode;
-  const canLock = Boolean(roundCode && readiness.eligible && readiness.status === 'CLOSED' && !changingDraw);
+  // The same database action resolves a CLOSED round in one of two safe ways:
+  // it locks an eligible snapshot, or records an ineligible rollover. Do not
+  // strand an ineligible CLOSED round by disabling this controlled action.
+  const canLock = Boolean(roundCode && readiness.status === 'CLOSED' && !changingDraw);
   const canSettle = Boolean(roundCode && readiness.status === 'LOCKED' && !changingDraw);
   elements.lockDraw.disabled = !canLock;
   elements.settleDraw.disabled = !canSettle;
@@ -214,12 +217,19 @@ function renderDrawControls() {
     return;
   }
   if (readiness.status === 'LOCKED') {
+    elements.lockDraw.textContent = 'ບັນຊີ Tickets ຖືກ Lock ແລ້ວ';
     elements.drawControlStatus.textContent = 'ບັນຊີຖືກ Lock ແລ້ວ — ພ້ອມ Settle';
     elements.drawControlDetail.textContent = 'Public Draw Room ສະແດງ commitment ແລະ snapshot hash ແລ້ວ.';
-  } else if (canLock) {
+  } else if (canLock && readiness.eligible) {
+    elements.lockDraw.textContent = 'Lock ບັນຊີ Tickets';
     elements.drawControlStatus.textContent = 'ພ້ອມ Lock ບັນຊີ Tickets';
     elements.drawControlDetail.textContent = 'ຫຼັງ Lock ແລ້ວ ຈະເພີ່ມ/ລຶບ tickets ບໍ່ໄດ້.';
+  } else if (canLock) {
+    elements.lockDraw.textContent = 'ຢືນຢັນ Rollover';
+    elements.drawControlStatus.textContent = 'ຮອບບໍ່ຄົບເກນ — ພ້ອມ Rollover';
+    elements.drawControlDetail.textContent = 'ການຢືນຢັນຈະບັນທຶກ rollover ຂອງ tickets ແລະເປີດໄລຍະຂາຍຕໍ່ໄປ; ບໍ່ມີການຈັບລາງວັນ.';
   } else {
+    elements.lockDraw.textContent = 'Lock ບັນຊີ Tickets';
     elements.drawControlStatus.textContent = 'ຍັງບໍ່ພ້ອມສຳລັບ Lock/Settle';
     elements.drawControlDetail.textContent = `ຕ້ອງປິດການຂາຍ ແລະ ຄົບ ${readiness.minTickets} tickets / ${readiness.minAccounts} ບັນຊີ ກ່ອນ.`;
   }
@@ -257,7 +267,10 @@ async function lockDraw() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ roundCode: drawReadiness.roundCode, confirmation: elements.lockConfirmation.value.trim() })
     });
-    setAdminMessage(`Lock ສຳເລັດ: ${result.lock.roundCode}. ເປີດ Public Draw Room ເພື່ອເບິ່ງ commitment.`);
+    const didRollover = result.lock.status === 'ROLLED_OVER';
+    setAdminMessage(didRollover
+      ? `Rollover ສຳເລັດ: ${result.lock.roundCode}. ບໍ່ໄດ້ຈັບລາງວັນ ເພາະຍັງບໍ່ຄົບເກນ.`
+      : `Lock ສຳເລັດ: ${result.lock.roundCode}. ເປີດ Public Draw Room ເພື່ອເບິ່ງ commitment.`);
     telegram.HapticFeedback?.notificationOccurred('success');
     await load();
   } catch (error) {
