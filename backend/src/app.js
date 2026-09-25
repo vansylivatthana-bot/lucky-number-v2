@@ -387,9 +387,9 @@ export function createApp({ config, supabase, botStatus, bot }) {
   });
 
   // The close action is intentionally absent here. Sales close only through
-  // the scheduled database rule, and a lock can only happen once readiness
-  // has been satisfied. This endpoint prepares an encrypted secret escrow
-  // and commits its hash with the immutable ticket snapshot.
+  // the scheduled database rule. A CLOSED round then resolves transactionally:
+  // eligible rounds lock an immutable snapshot; ineligible rounds roll over.
+  // This endpoint prepares an encrypted secret escrow only for the lock path.
   app.post('/api/admin/draws/lock', requireTelegram, async (req, res) => {
     if (req.telegramUser.telegramId !== config.adminTelegramId) {
       return res.status(403).json({ ok: false, error: 'ADMIN_FORBIDDEN' });
