@@ -31,6 +31,9 @@ h2 { font-size: 1.15rem; margin-bottom: .35rem; }
 .verification-status.error { color: #fecaca; }
 .verification-detail { font-size: .88rem; margin-bottom: .8rem; }
 .verification button { width: 100%; }
+.draw-actions { display: grid; gap: .7rem; }
+.confirm-label { color: #cbd5e1; display: grid; font-size: .9rem; gap: .45rem; margin-top: .9rem; }
+.confirm-label input { background: #1e293b; border: 1px solid #64748b; border-radius: .6rem; color: #f8fafc; font: inherit; min-height: 2.7rem; padding: .55rem .65rem; width: 100%; }
 .balance, .stat { font-size: 1.8rem; font-weight: 750; margin-bottom: .35rem; }
 .round-card { border-color: rgb(96 165 250 / .65); }
 .status { color: #86efac; font-weight: 700; margin-bottom: .4rem; }
