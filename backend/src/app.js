@@ -53,6 +53,71 @@ export function createApp({ config, supabase, botStatus, bot }) {
     res.status(ready ? 200 : 503).json({ ok: ready, database: !error, telegram: botStatus.webhookReady });
   });
 
+  // Public, aggregate-only draw room. It is deliberately available without
+  // Telegram authentication so every participant can follow the same state.
+  // It never returns Telegram IDs, wallets or secret material before settle.
+  app.get('/api/draws/:roundCode/room', async (req, res) => {
+    const requested = String(req.params.roundCode || '').trim();
+    if (requested !== 'latest' && !/^DR-\d{4}-\d{2}-\d{3}$/.test(requested)) {
+      return res.status(400).json({ ok: false, error: 'ROUND_CODE_INVALID' });
+    }
+
+    try {
+      let roundQuery = supabase
+        .from('monthly_draw_rounds_v3')
+        .select('id,round_code,status,ticket_price,min_eligible_tickets,min_distinct_accounts,locked_at,drawn_at,settled_at,opened_at')
+        .order('opened_at', { ascending: false })
+        .limit(1);
+      if (requested !== 'latest') roundQuery = roundQuery.eq('round_code', requested);
+      const { data: round, error: roundError } = await roundQuery.maybeSingle();
+      if (roundError) throw roundError;
+      if (!round) return res.status(404).json({ ok: false, error: 'ROUND_NOT_FOUND' });
+
+      const ticketsResult = await supabase
+        .from('draw_tickets_v3')
+        .select('owner_telegram_id')
+        .eq('draw_round_id', round.id)
+        .in('state', ['ACTIVE', 'LOCKED', 'WINNER']);
+      if (ticketsResult.error) throw ticketsResult.error;
+      const tickets = ticketsResult.data || [];
+      const proofResult = ['LOCKED', 'DRAW_DELAYED', 'DRAWN', 'SETTLED'].includes(round.status)
+        ? await supabase
+          .from('draw_proofs_v3')
+          .select('ticket_snapshot_hash,server_secret_commitment,algorithm_version,committed_at,published_at')
+          .eq('draw_round_id', round.id)
+          .maybeSingle()
+        : { data: null, error: null };
+      if (proofResult.error) throw proofResult.error;
+
+      res.json({
+        ok: true,
+        room: {
+          roundCode: round.round_code,
+          status: round.status,
+          ticketPrice: Number(round.ticket_price),
+          ticketCount: tickets.length,
+          accountCount: new Set(tickets.map((ticket) => ticket.owner_telegram_id)).size,
+          minTickets: Number(round.min_eligible_tickets),
+          minAccounts: Number(round.min_distinct_accounts),
+          lockedAt: round.locked_at,
+          drawnAt: round.drawn_at,
+          settledAt: round.settled_at,
+          proof: proofResult.data ? {
+            snapshotHash: proofResult.data.ticket_snapshot_hash,
+            serverSecretCommitment: proofResult.data.server_secret_commitment,
+            algorithmVersion: proofResult.data.algorithm_version,
+            committedAt: proofResult.data.committed_at,
+            publishedAt: proofResult.data.published_at
+          } : null,
+          proofUrl: round.status === 'SETTLED' ? `/api/draws/${round.round_code}/proof` : null
+        }
+      });
+    } catch (error) {
+      log('error', 'draw.room.failed', { code: error.code, message: error.message });
+      res.status(503).json({ ok: false, error: 'DRAW_ROOM_UNAVAILABLE' });
+    }
+  });
+
   // This endpoint intentionally exposes only a proof after the database has
   // settled the round. It never returns Telegram IDs or wallet information.
   app.get('/api/draws/:roundCode/proof', async (req, res) => {
