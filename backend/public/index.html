@@ -64,6 +64,15 @@
               <p id="draw-readiness-detail" class="muted verification-detail"></p>
               <button id="check-draw-readiness" class="secondary" type="button">ກວດເງື່ອນໄຂຮອບ</button>
             </section>
+            <section class="verification" aria-label="Draw controls">
+              <p class="label">Draw Control · Test</p>
+              <p id="draw-control-status" class="verification-status">ກຳລັງກວດສອບ…</p>
+              <p id="draw-control-detail" class="muted verification-detail"></p>
+              <div class="draw-actions">
+                <button id="lock-draw" class="secondary" type="button" disabled>Lock ບັນຊີ Tickets</button>
+                <button id="settle-draw" class="primary" type="button" disabled>ຈັບ ແລະ ຈ່າຍລາງວັນ</button>
+              </div>
+            </section>
             <button id="admin-credit" class="secondary admin-credit" type="button">ເພີ່ມ Test Credit 10.00 USDT</button>
             <p id="admin-message" class="message" aria-live="polite"></p>
             <p class="admin-note">ການກວດນີ້ເປັນ read-only ແລະບໍ່ເປີດເຜີຍຍອດຂອງຜູ້ໃຊ້ອື່ນ. ເພີ່ມໄດ້ສະເພາະຍອດທົດສອບຂອງ admin ເອງ.</p>
@@ -110,6 +119,42 @@
         <div class="dialog-actions">
           <button value="cancel" class="secondary" type="submit">ຍົກເລີກ</button>
           <button id="confirm-credit" class="primary" type="button">ຢືນຢັນເພີ່ມ</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="lock-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <p class="label">ຂັ້ນທີ 1: Lock Draw</p>
+        <h2>ລັອກບັນຊີ Tickets?</h2>
+        <p class="muted">ຫຼັງ lock ແລ້ວ tickets ຈະແກ້ໄຂບໍ່ໄດ້. ລະບົບຈະບັນທຶກ snapshot hash ແລະ secret commitment ໃນ Public Draw Room.</p>
+        <label class="confirm-label">ພິມ <strong id="lock-confirmation-example"></strong>
+          <input id="lock-confirmation" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary" type="submit">ຍົກເລີກ</button>
+          <button id="confirm-lock" class="primary" type="button">ຢືນຢັນ Lock</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settle-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <p class="label">ຂັ້ນທີ 2: Settle Draw</p>
+        <h2>ຈັບ ແລະ ຈ່າຍລາງວັນ?</h2>
+        <p class="muted">ໃຊ້ NIST Randomness Beacon ທີ່ເຜີຍແຜ່ແລ້ວ. ກະລຸນາໃສ່ reference ແລະ value ໃຫ້ກວດຄືນໄດ້.</p>
+        <label class="confirm-label">NIST reference
+          <input id="entropy-reference" autocomplete="off" spellcheck="false" placeholder="ຕົວຢ່າງ: chain index / URL">
+        </label>
+        <label class="confirm-label">NIST value
+          <input id="entropy-value" autocomplete="off" spellcheck="false" placeholder="ຄ່າ random value ທີ່ເຜີຍແຜ່ແລ້ວ">
+        </label>
+        <label class="confirm-label">ພິມ <strong id="settle-confirmation-example"></strong>
+          <input id="settle-confirmation" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary" type="submit">ຍົກເລກ</button>
+          <button id="confirm-settle" class="primary" type="button">ຢືນຢັນ Settle</button>
         </div>
       </form>
     </dialog>
